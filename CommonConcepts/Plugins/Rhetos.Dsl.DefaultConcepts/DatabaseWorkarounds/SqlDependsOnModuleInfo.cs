@@ -27,30 +27,63 @@ namespace Rhetos.Dsl.DefaultConcepts
 {
     [Export(typeof(IConceptInfo))]
     [ConceptKeyword("SqlDependsOn")]
-    public class SqlDependsOnModuleInfo : IMacroConcept
+    public class SqlDependsOnModuleInfo : IConceptInfo
     {
         [ConceptKey]
         public IConceptInfo Dependent { get; set; }
         [ConceptKey]
         public ModuleInfo DependsOn { get; set; }
+    }
 
-        public override string ToString()
+    [Export(typeof(IConceptMacro))]
+    public class SqlDependsOnModuleMacro : IConceptMacro<SqlDependsOnModuleInfo>
+    {
+        public IEnumerable<IConceptInfo> CreateNewConcepts(SqlDependsOnModuleInfo conceptInfo, IDslModel existingConcepts)
         {
-            return Dependent + " depends on " + DependsOn;
+            var newConcepts = new List<IConceptInfo>();
+
+            newConcepts.AddRange(existingConcepts.FindByType<PropertyInfo>()
+                .Where(p => p.DataStructure.Module == conceptInfo.DependsOn)
+                .Where(p => p != conceptInfo.Dependent && p.DataStructure != conceptInfo.Dependent)
+                .Select(p => new SqlDependsOnPropertyInfo { Dependent = conceptInfo.Dependent, DependsOn = p }));
+
+            newConcepts.AddRange(existingConcepts.FindByType<DataStructureInfo>()
+                .Where(item => item.Module == conceptInfo.DependsOn)
+                .Where(item => item != conceptInfo.Dependent)
+                .Select(item => new SqlDependsOnDataStructureInfo { Dependent = conceptInfo.Dependent, DependsOn = item }));
+
+            return newConcepts;
         }
+    }
 
-        public override int GetHashCode()
+    [Export(typeof(IConceptMacro))]
+    public class SqlDependsOnModuleMacro2 : IConceptMacro<SqlDependsOnModuleInfo>
+    {
+        public IEnumerable<IConceptInfo> CreateNewConcepts(SqlDependsOnModuleInfo conceptInfo, IDslModel existingConcepts)
         {
-            return ToString().GetHashCode();
-        }
+            var newConcepts = new List<IConceptInfo>();
 
-        public IEnumerable<IConceptInfo> CreateNewConcepts(IEnumerable<IConceptInfo> existingConcepts)
-        {
-            return existingConcepts.OfType<PropertyInfo>()
-                .Where(p => p.DataStructure.Module == DependsOn)
-                .Where(p => p != Dependent && p.DataStructure != Dependent)
-                .Select(p => new SqlDependsOnPropertyInfo {Dependent = Dependent, DependsOn = p})
-                .ToList();
+            newConcepts.AddRange(existingConcepts.FindByType<SqlFunctionInfo>()
+                .Where(item => item.Module == conceptInfo.DependsOn)
+                .Where(item => item != conceptInfo.Dependent)
+                .Select(item => new SqlDependsOnSqlFunctionInfo { Dependent = conceptInfo.Dependent, DependsOn = item }));
+
+            newConcepts.AddRange(existingConcepts.FindByType<SqlIndexMultipleInfo>()
+                .Where(item => item.Entity.Module == conceptInfo.DependsOn)
+                .Where(item => item != conceptInfo.Dependent && item.Entity != conceptInfo.Dependent)
+                .Select(item => new SqlDependsOnSqlIndexInfo { Dependent = conceptInfo.Dependent, DependsOn = item }));
+
+            newConcepts.AddRange(existingConcepts.FindByType<SqlObjectInfo>()
+                .Where(item => item.Module == conceptInfo.DependsOn)
+                .Where(item => item != conceptInfo.Dependent)
+                .Select(item => new SqlDependsOnSqlObjectInfo { Dependent = conceptInfo.Dependent, DependsOn = item }));
+
+            newConcepts.AddRange(existingConcepts.FindByType<SqlViewInfo>()
+                .Where(item => item.Module == conceptInfo.DependsOn)
+                .Where(item => item != conceptInfo.Dependent)
+                .Select(item => new SqlDependsOnSqlViewInfo { Dependent = conceptInfo.Dependent, DependsOn = item }));
+
+            return newConcepts;
         }
     }
 }

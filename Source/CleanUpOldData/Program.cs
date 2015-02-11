@@ -17,13 +17,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Text;
-using System.Threading;
-using Rhetos.Utilities;
-using Rhetos.Deployment;
-using System.Collections.Generic;
 using Rhetos;
+using Rhetos.Deployment;
+using Rhetos.Utilities;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 
 namespace CleanupOldData
 {
@@ -33,6 +33,8 @@ namespace CleanupOldData
         {
             try
             {
+                Paths.InitializeRhetosServerRootPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
+
                 string connectionString = SqlUtility.ConnectionString;
                 Console.WriteLine("SQL connection string: " + SqlUtility.MaskPassword(connectionString));
                 var sqlExecuter = GetSqlExecuterImplementation(connectionString);
@@ -47,7 +49,8 @@ namespace CleanupOldData
                 DeploymentUtility.WriteError(ex.Message);
                 Console.WriteLine("Details:");
                 Console.WriteLine(ex);
-                Thread.Sleep(3000);
+                if (Environment.UserInteractive) 
+                    Thread.Sleep(3000);
                 return 1;
             }
         }

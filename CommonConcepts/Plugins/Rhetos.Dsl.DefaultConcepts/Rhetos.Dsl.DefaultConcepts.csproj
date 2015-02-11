@@ -109,6 +109,38 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Computations\ApplyFilterOnClientReadInfo.cs" />
+    <Compile Include="Computations\ItemFilterApplyOnClientReadInfo.cs" />
+    <Compile Include="Computations\ComposableFilterUseExecutionContextInfo.cs" />
+    <Compile Include="Computations\ComputeForNewItemsWithoutFilterInfo.cs" />
+    <Compile Include="Computations\ComputeForNewItemsInfo.cs" />
+    <Compile Include="Computations\ComposableFilterApplyOnClientReadInfo.cs" />
+    <Compile Include="Computations\KeyPropertyIDComputedFromInfo.cs" />
+    <Compile Include="Computations\LockItemsExceptPropertiesInfo.cs" />
+    <Compile Include="Computations\LockItemsLockPropertyInfo.cs" />
+    <Compile Include="Computations\PersistedKeyPropertiesInfo.cs" />
+    <Compile Include="Computations\KeyPropertyComputedFromInfo.cs" />
+    <Compile Include="ConceptsListToDslModel.cs" />
+    <Compile Include="DatabaseWorkarounds\SqlIndexClusteredInfo.cs" />
+    <Compile Include="DatabaseWorkarounds\SqlIndexMultipleFollowingPropertyInfo.cs" />
+    <Compile Include="RowPermissions\AutoInheritRowPermissionsInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowWriteInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyReadInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowReadInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyWriteInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritFromBaseInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritFromInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritFromReferenceInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritReadFromInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritWriteFromInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsPluginableFiltersInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsSingleFunctionRuleInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsReadInfo.cs" />
+    <Compile Include="RowPermissions\RowPermissionsWriteInfo.cs" />
     <Compile Include="DatabaseWorkarounds\AutoSqlViewDependsOnInfo.cs" />
     <Compile Include="DatabaseWorkarounds\AutoSqlFunctionDependsOnInfo.cs" />
     <Compile Include="DatabaseWorkarounds\AutoSqlQueryableDependsOnInfo.cs" />
@@ -116,6 +148,13 @@
     <Compile Include="DatabaseWorkarounds\AutoLegacyEntityDependsOnInfo.cs" />
     <Compile Include="DatabaseWorkarounds\AutoSqlProcedureDependsOnInfo.cs" />
     <Compile Include="DatabaseWorkarounds\ModuleAutoSqlDependsOnInfo.cs" />
+    <Compile Include="DataStructure\IsSubtypeOfDefaultNameInfo.cs" />
+    <Compile Include="DataStructure\PolymorphicMaterializedInfo.cs" />
+    <Compile Include="DataStructure\SubtypeImplementationColumnInfo.cs" />
+    <Compile Include="DataStructure\PolymorphicPropertyInfo.cs" />
+    <Compile Include="DataStructure\SubtypeImplementsPropertyInfo.cs" />
+    <Compile Include="DataStructure\IsSubtypeOfInfo.cs" />
+    <Compile Include="DataStructure\PolymorphicInfo.cs" />
     <Compile Include="DataStructure\RegisteredInterfaceImplementationInfo.cs" />
     <Compile Include="DataStructure\RegisteredInterfaceImplementationHelperInfo.cs" />
     <Compile Include="DataStructure\ImplementsInterfacePropertyInfo.cs" />
@@ -133,7 +172,7 @@
     <Compile Include="Computations\PersistedComputeForNewBaseItemsWithFilterInfo.cs" />
     <Compile Include="Computations\EntityComputedFromAllPropertiesInfo.cs" />
     <Compile Include="Computations\EntityComputedFromInfo.cs" />
-    <Compile Include="Computations\LockItemsForPropertyInfo.cs" />
+    <Compile Include="Computations\LockItemsMarkPropertyInfo.cs" />
     <Compile Include="Computations\DenySaveForPropertyInfo.cs" />
     <Compile Include="DatabaseWorkarounds\SqlDependsOnSqlObjectInfo.cs" />
     <Compile Include="DatabaseWorkarounds\SqlObjectInfo.cs" />
@@ -195,6 +234,7 @@
     <Compile Include="DataStructure\Properties\DateTimePropertyInfo.cs" />
     <Compile Include="DataStructure\Properties\LongStringPropertyInfo.cs" />
     <Compile Include="SimpleBusinessLogic\BrowseTakeNamedPropertyInfo.cs" />
+    <Compile Include="SimpleBusinessLogic\AutoCodeTriggerInfo.cs" />
     <Compile Include="SimpleBusinessLogic\ReloadBeforeValidationsInfo.cs" />
     <Compile Include="SimpleBusinessLogic\RegExMatchDefaultMessage.cs" />
     <Compile Include="SimpleBusinessLogic\LoggingRelatedItemInfo.cs" />
@@ -249,7 +289,7 @@
     <Compile Include="DataStructure\Properties\DecimalPropertyInfo.cs" />
     <Compile Include="DatabaseWorkarounds\SqlDefaultPropertyInfo.cs" />
     <Compile Include="SimpleBusinessLogic\UniquePropertiesInfo.cs" />
-    <Compile Include="SimpleBusinessLogic\AllPropertyLoggingInfo.cs" />
+    <Compile Include="SimpleBusinessLogic\AllPropertiesLoggingInfo.cs" />
     <Compile Include="SimpleBusinessLogic\UniquePropertyInfo.cs" />
     <Compile Include="DataStructure\ImplementsInterfaceInfo.cs" />
     <Compile Include="DataStructure\EntityInfo.cs" />
@@ -260,6 +300,7 @@
     <Compile Include="DataStructure\Properties\ReferencePropertyInfo.cs" />
     <Compile Include="SimpleBusinessLogic\RequiredPropertyInfo.cs" />
     <Compile Include="DataStructure\Properties\ShortStringPropertyInfo.cs" />
+    <Compile Include="SqlObjectsIndex.cs" />
     <Compile Include="SqlAnalysis.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -279,6 +320,10 @@
     <ProjectReference Include="..\..\..\Source\Rhetos.Dsl.Interfaces\Rhetos.Dsl.Interfaces.csproj">
       <Project>{f4acd412-2782-4191-8708-c7ae99b0cee9}</Project>
       <Name>Rhetos.Dsl.Interfaces</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Rhetos.Dom.DefaultConcepts.Interfaces\Rhetos.Dom.DefaultConcepts.Interfaces.csproj">
+      <Project>{32d57085-6113-43f9-a505-d8b311bd6204}</Project>
+      <Name>Rhetos.Dom.DefaultConcepts.Interfaces</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

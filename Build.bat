@@ -7,12 +7,13 @@
 @SET VSTOOLS=
 @IF "%VS100COMNTOOLS%" NEQ "" SET VSTOOLS=%VS100COMNTOOLS%
 @IF "%VS110COMNTOOLS%" NEQ "" SET VSTOOLS=%VS110COMNTOOLS%
+@IF "%VS120COMNTOOLS%" NEQ "" SET VSTOOLS=%VS120COMNTOOLS%
 CALL "%VSTOOLS%\..\..\VC\vcvarsall.bat" x86 || GOTO Error0
 @ECHO ON
 :SkipVcvarsall
 
 IF EXIST Build.log DEL Build.log || GOTO Error0
-DevEnv.exe "Rhetos.sln" /build %Config% /out Build.log || TYPE Build.log && GOTO Error0
+DevEnv.com "Rhetos.sln" /rebuild %Config% /out Build.log || TYPE Build.log && GOTO Error0
 
 @REM ================================================
 

@@ -34,10 +34,18 @@ namespace Rhetos.Dsl.DefaultConcepts
 
         [ConceptKey]
         public DataStructureInfo Source { get; set; }
+    }
 
-        public static string RecomputeFunctionName(EntityComputedFromInfo info)
+    [Export(typeof(IConceptMacro))]
+    public class EntityComputedFromMacro : IConceptMacro<EntityComputedFromInfo>
+    {
+        public IEnumerable<IConceptInfo> CreateNewConcepts(EntityComputedFromInfo conceptInfo, IDslModel existingConcepts)
         {
-            return "RecomputeFrom" + DslUtility.NameOptionalModule(info.Source, info.Target.Module);
+            if (!existingConcepts.FindByType<KeyPropertyComputedFromInfo>().Any(kp => kp.PropertyComputedFrom.Dependency_EntityComputedFrom == conceptInfo)
+                && !existingConcepts.FindByType<KeyPropertyIDComputedFromInfo>().Any(kp => kp.EntityComputedFrom == conceptInfo)
+                && !existingConcepts.FindByType<PersistedKeyPropertiesInfo>().Any(kp => kp.Persisted == conceptInfo.Target && kp.Persisted.Source == conceptInfo.Source))
+                return new[] { new KeyPropertyIDComputedFromInfo { EntityComputedFrom = conceptInfo } };
+            return null;
         }
     }
 }

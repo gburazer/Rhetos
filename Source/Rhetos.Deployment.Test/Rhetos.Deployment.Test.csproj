@@ -41,10 +41,6 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Autofac, Version=2.5.2.830, Culture=neutral, PublicKeyToken=17863af14b0044da, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\External\Autofac\Autofac.dll</HintPath>
-    </Reference>
     <Reference Include="Ionic.Zip, Version=1.9.1.8, Culture=neutral, PublicKeyToken=edbe51ad942a3f5c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\External\DotNetZip\Ionic.Zip.dll</HintPath>
@@ -82,7 +78,6 @@
   <ItemGroup>
     <Compile Include="DataMigrationTest.cs" />
     <Compile Include="DataMigration_Accessor.cs" />
-    <Compile Include="DeploymentUtilityTest.cs" />
     <Compile Include="PackageCompilerShould.cs" />
     <Compile Include="PackageSetExtractorShould.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

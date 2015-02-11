@@ -34,9 +34,11 @@ namespace InitAspNetDatabase
 {
     class Program
     {
+        static InitializeAssemblyResolver initializeAssemblyResolver = new InitializeAssemblyResolver();
+
         static int Main(string[] args)
         {
-            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(FindAssemblyInParentBinFolder);
+            Paths.InitializeRhetosServerRootPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\.."));
 
             string errorMessage = null;
             try
@@ -69,32 +71,14 @@ namespace InitAspNetDatabase
             return 0;
         }
 
-        private static System.Reflection.Assembly FindAssemblyInParentBinFolder(object sender, ResolveEventArgs args)
-        {
-            string assemblyPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", new AssemblyName(args.Name).Name + ".dll"));
-            if (File.Exists(assemblyPath) == false)
-            {
-                Console.WriteLine("Guessed external assembly path '" + assemblyPath + "' for assembly name '" + args.Name + "'.");
-                return null;
-            }
-            return Assembly.LoadFrom(assemblyPath);
-        }
-
         private static void CreateMembershipProviderTables()
         {
-            SqlUtility.LoadSpecificConnectionString(BinFolderConnectionStringsFile());
             AuthenticationServiceInitializer.InitializeDatabaseConnection(autoCreateTables: true);
 
             // Force lazy database initialization.
             int nonexistentUserInt = WebSecurity.GetUserId(Guid.NewGuid().ToString());
             if (nonexistentUserInt != -1)
                 throw new ApplicationException("Unexpected GetUserId result.");
-
-        }
-
-        private static string BinFolderConnectionStringsFile()
-        {
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"..\ConnectionStrings.config");
         }
     }
 }

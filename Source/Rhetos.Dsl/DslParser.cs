@@ -34,6 +34,7 @@ namespace Rhetos.Dsl
         protected readonly IConceptInfo[] _conceptInfoPlugins;
         protected readonly ILogger _performanceLogger;
         protected readonly ILogger _logger;
+        protected readonly ILogger _keywordsLogger;
 
         public DslParser(IDslSource dslSource, IConceptInfo[] conceptInfoPlugins, ILogProvider logProvider)
         {
@@ -41,6 +42,7 @@ namespace Rhetos.Dsl
             _conceptInfoPlugins = conceptInfoPlugins;
             _performanceLogger = logProvider.GetLogger("Performance");
             _logger = logProvider.GetLogger("DslParser");
+            _keywordsLogger = logProvider.GetLogger("DslParser.Keywords");
         }
 
         public IEnumerable<IConceptInfo> ParsedConcepts
@@ -49,13 +51,23 @@ namespace Rhetos.Dsl
             {
                 IEnumerable<IConceptParser> parsers = CreateGenericParsers();
                 var parsedConcepts = ExtractConcepts(parsers);
-                var alternativeInitializationGeneratedReferences = ResolveAlternativeInitializationConcepts(parsedConcepts);
-                return parsedConcepts.Concat(alternativeInitializationGeneratedReferences).ToArray();
+                var alternativeInitializationGeneratedReferences = InitializeAlternativeInitializationConcepts(parsedConcepts);
+                return new[] { CreateInitializationConcept() }
+                    .Concat(parsedConcepts)
+                    .Concat(alternativeInitializationGeneratedReferences)
+                    .ToList();
             }
         }
 
         //=================================================================
 
+        private IConceptInfo CreateInitializationConcept()
+        {
+            return new InitializationConcept
+            {
+                RhetosVersion = GetType().Assembly.GetName().Version.ToString()
+            };
+        }
 
         protected IEnumerable<IConceptParser> CreateGenericParsers()
         {
@@ -72,8 +84,7 @@ namespace Rhetos.Dsl
                 .Where(cm => cm.conceptKeyword != null)
                 .ToList();
 
-            _logger.Trace(() => "DSL keywords: " + string.Join(" ",
-                conceptMetadata.Select(cm => cm.conceptKeyword).OrderBy(keyword => keyword).Distinct()));
+            _keywordsLogger.Trace(() => string.Join(" ", conceptMetadata.Select(cm => cm.conceptKeyword).OrderBy(keyword => keyword).Distinct()));
 
             var result = conceptMetadata.Select(cm => new GenericParser(cm.conceptType, cm.conceptKeyword)).ToList<IConceptParser>();
             _performanceLogger.Write(stopwatch, "DslParser.CreateGenericParsers.");
@@ -96,7 +107,7 @@ namespace Rhetos.Dsl
                 UpdateContextForNextConcept(tokenReader, context, conceptInfo);
             }
 
-            _performanceLogger.Write(stopwatch, "DslParser.ExtractConcepts.");
+            _performanceLogger.Write(stopwatch, "DslParser.ExtractConcepts (" + newConcepts.Count + " concepts).");
 
             if (context.Count > 0)
                 throw new DslSyntaxException(string.Format(
@@ -208,13 +219,12 @@ namespace Rhetos.Dsl
             }
         }
 
-        protected List<IConceptInfo> ResolveAlternativeInitializationConcepts(IEnumerable<IConceptInfo> parsedConcepts)
+        protected IEnumerable<IConceptInfo> InitializeAlternativeInitializationConcepts(IEnumerable<IConceptInfo> parsedConcepts)
         {
-            var newConcets = new List<IConceptInfo>();
-            foreach (var alternativeInitializationConcept in parsedConcepts.OfType<IAlternativeInitializationConcept>())
-                newConcets.AddRange(AlternativeInitialization.InitializeNonparsablePropertiesRecursive(alternativeInitializationConcept));
-            return newConcets;
+            var stopwatch = Stopwatch.StartNew();
+            var newConcepts = AlternativeInitialization.InitializeNonparsableProperties(parsedConcepts, _logger);
+            _performanceLogger.Write(stopwatch, "DslParser.InitializeAlternativeInitializationConcepts (" + newConcepts.Count() + " new concepts created).");
+            return newConcepts;
         }
-
     }
 }

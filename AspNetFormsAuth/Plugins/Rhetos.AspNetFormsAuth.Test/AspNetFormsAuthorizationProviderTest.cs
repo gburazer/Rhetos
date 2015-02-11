@@ -17,14 +17,14 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Rhetos.Dom.DefaultConcepts;
+using Rhetos.Security;
+using Rhetos.TestCommon;
+using Rhetos.Utilities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Rhetos.Utilities;
-using Rhetos.TestCommon;
-using Rhetos.Security;
 
 namespace Rhetos.AspNetFormsAuth.Test
 {
@@ -86,6 +86,7 @@ namespace Rhetos.AspNetFormsAuth.Test
             public Guid ID { get; set; }
             public string ClaimResource { get; set; }
             public string ClaimRight { get; set; }
+            public bool? Active { get; set; }
         }
 
         [TestMethod]

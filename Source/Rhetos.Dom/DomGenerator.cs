@@ -40,7 +40,7 @@ namespace Rhetos.Dom
         private readonly ICodeGenerator _codeGenerator; //********????***********/
         private readonly ILogProvider _log;
         private readonly IAssemblyGenerator _assemblyGenerator;
-        private readonly string _assemblyName;
+        private readonly DomGeneratorOptions _domGeneratorOptions;
 
         /// <summary>
         /// If assemblyName is not null, the assembly will be saved on disk.
@@ -51,16 +51,16 @@ namespace Rhetos.Dom
             ICodeGenerator codeGenerator,
             ILogProvider logProvider,
             IAssemblyGenerator assemblyGenerator,
-            string assemblyName)
+            DomGeneratorOptions domGeneratorOptions)
         {
-            _assemblyName = assemblyName;
+            _domGeneratorOptions = domGeneratorOptions;
             _pluginRepository = plugins;
             _codeGenerator = codeGenerator;
             _log = logProvider;
             _assemblyGenerator = assemblyGenerator;
         }
 
-        public Assembly ObjectModel
+        public Assembly Assembly
         {
             get
             {
@@ -73,16 +73,16 @@ namespace Rhetos.Dom
         private void GenerateObjectModel()
         {
             IAssemblySource assemblySource = _codeGenerator.ExecutePlugins(_pluginRepository, "/*", "*/", null);
-            _log.GetLogger("Domain Object Model references").Trace(string.Join(", ", assemblySource.RegisteredReferences));
+            _log.GetLogger("Domain Object Model references").Trace(() => string.Join(", ", assemblySource.RegisteredReferences));
             _log.GetLogger("Domain Object Model source").Trace(assemblySource.GeneratedCode);
 
             CompilerParameters parameters = new CompilerParameters
             {
                 GenerateExecutable = false,
-                GenerateInMemory = string.IsNullOrEmpty(_assemblyName),
-                OutputAssembly = string.IsNullOrEmpty(_assemblyName) ? null : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _assemblyName + ".dll"),
+                GenerateInMemory = string.IsNullOrEmpty(Paths.DomAssemblyName),
+                OutputAssembly = string.IsNullOrEmpty(Paths.DomAssemblyName) ? null : Path.Combine(Paths.BinFolder, Paths.DomAssemblyName + ".dll"),
                 IncludeDebugInformation = true,
-                CompilerOptions = "/optimize"
+                CompilerOptions = _domGeneratorOptions.Debug ? "" : "/optimize"
             };
 
             _objectModel = _assemblyGenerator.Generate(assemblySource, parameters);

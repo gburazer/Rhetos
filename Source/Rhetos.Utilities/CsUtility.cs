@@ -18,6 +18,7 @@
 */
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -27,15 +28,13 @@ namespace Rhetos.Utilities
     public static class CsUtility
     {
         /// <summary>
-        /// Generater a C# string constant by adding quotes at the beginning and the end of the string and using escape sequences for special characters.
+        /// Generates a C# string constant.
         /// </summary>
-        /// <param name="text"></param>
-        /// <returns></returns>
         public static string QuotedString(string text)
         {
             if (text == null)
-                throw new ArgumentNullException("text");
-            return @"""" + text.Replace(@"\", @"\\").Replace(@"""", @"\""") + @"""";
+                return "null";
+            return "@\"" + text.Replace("\"", "\"\"") + "\"";
         }
 
         /// <summary>
@@ -66,12 +65,75 @@ namespace Rhetos.Utilities
         /// Reads a value from the dictionary, with extended error handling.
         /// Parameter exceptionMessage can contain format tag {0} that will be replaced by missing key.
         /// </summary>
-        public static TValue GetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key, string exceptionMessage)
+        public static TValue GetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key, Func<string> exceptionMessage)
         {
             TValue value;
             if (!dictionary.TryGetValue(key, out value))
-                throw new FrameworkException(string.Format(exceptionMessage, key));
+                throw new FrameworkException(string.Format(exceptionMessage(), key));
             return value;
+        }
+
+        /// <summary>
+        /// Reads a value from the dictionary, with extended error handling.
+        /// Parameter exceptionMessage can contain format tag {0} that will be replaced by missing key.
+        /// </summary>
+        public static TValue GetValue<TKey, TValue>(this IDictionary<TKey, TValue> dictionary, TKey key, string exceptionMessage)
+        {
+            return GetValue(dictionary, key, () => exceptionMessage);
+        }
+
+        /// <summary>
+        /// Returns null if the argument is a valid identifier, error message otherwise.
+        /// </summary>
+        public static string GetIdentifierError(string name)
+        {
+            if (name == null)
+                return "Given name is null.";
+
+            if (string.IsNullOrEmpty(name))
+                return "Given name is empty.";
+
+            {
+                char c = name[0];
+                if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '_')
+                    return "Given name '" + name + "' is not valid. First character is not an english letter or undescore.";
+            }
+
+            {
+                foreach (char c in name)
+                    if ((c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '_' && (c < '0' || c > '9'))
+                        return "Given name '" + name + "' is not valid. Character '" + c + "' is not an english letter or number or undescore.";
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Result does not include implemented interfaces, only base classes.
+        /// Result includes the given type.
+        /// </summary>
+        public static List<Type> GetClassHierarchy(Type type)
+        {
+            var types = new List<Type>();
+            while (type != typeof(object))
+            {
+                types.Add(type);
+                type = type.BaseType;
+            }
+            types.Reverse();
+            return types;
+        }
+
+        /// <summary>
+        /// If <paramref name="items"/> is not a List or an Array, converts it to a List&lt;<typeparamref name="T"/>&gt;.
+        /// Use this function to make sure that the <paramref name="items"/> is not a LINQ query
+        /// before using it multiple times, in order to aviod the query evaluation every time
+        /// (sometimes it means reading data from the database on every evaluation).
+        /// </summary>
+        public static void Materialize<T>(ref IEnumerable<T> items)
+        {
+            if (items != null && !(items is IList))
+                items = items.ToList();
         }
     }
 }

@@ -33,40 +33,44 @@ using System.DirectoryServices;
 namespace Rhetos.Security
 {
     /// <summary>
-    /// This is a security principal provider (IUserInfo) based on WCF and Windows authentication.
+    /// This is a security principal provider based on WCF and Windows authentication.
     /// </summary>
-    public class WcfWindowsUserInfo : IUserInfo
+    public class WcfWindowsUserInfo : IWindowsUserInfo
     {
+        #region IWindowsUserInfo implementation
+
         public bool IsUserRecognized { get { return _isUserRecognized.Value; } }
         public string UserName { get { CheckIfUserRecognized(); return _userName.Value; } }
         public string Workstation { get { CheckIfUserRecognized(); return _workstation.Value; } }
         public WindowsIdentity WindowsIdentity { get { CheckIfUserRecognized(); return _windowsIdentity.Value; } }
+        public string Report() { return UserName + "," + Workstation; }
 
-        private ILogger _logger;
-        private ILogger _performanceLogger;
+        #endregion
+
+        private readonly ILogger _logger;
+        private readonly ILogger _performanceLogger;
 
         private Lazy<bool> _isUserRecognized;
+        /// <summary>Format: "domain\user"</summary>
         private Lazy<string> _userName;
         private Lazy<string> _workstation;
         private Lazy<WindowsIdentity> _windowsIdentity;
-        private Lazy<string> _accountName;
 
-        public WcfWindowsUserInfo(ILogProvider logProvider)
+        public WcfWindowsUserInfo(ILogProvider logProvider, WindowsSecurity windowsSecurity)
         {
-            _logger = logProvider.GetLogger("WcfWindowsUserInfo");
+            _logger = logProvider.GetLogger(GetType().Name);
             _performanceLogger = logProvider.GetLogger("Performance");
 
             _isUserRecognized = new Lazy<bool>(() => InitIsUserRecognized());
             _userName = new Lazy<string>(() => InitUserName());
-            _workstation = new Lazy<string>(() => WcfUtility.InitClientWorkstation(_logger));
+            _workstation = new Lazy<string>(() => windowsSecurity.GetClientWorkstation());
             _windowsIdentity = new Lazy<WindowsIdentity>(() => InitWindowsIdentity());
-            _accountName = new Lazy<string>(() => InitAccountName());
         }
 
         private void CheckIfUserRecognized()
         {
             if (!IsUserRecognized)
-                throw new UserException("User is not authenticated.");
+                throw new ClientException("User is not authenticated.");
         }
 
         private bool InitIsUserRecognized()
@@ -144,99 +148,6 @@ namespace Rhetos.Security
                 authenticationType = "unknown authentication type";
             }
             return wi.Name + ", " + authenticationType + ", LocalAdmin=" + new WindowsPrincipal(wi).IsInRole(WindowsBuiltInRole.Administrator);
-        }
-
-        private string InitAccountName()
-        {
-            _logger.Trace(() => "Domain: " + Environment.UserDomainName);
-
-            var domainPrefix = Environment.UserDomainName + "\\";
-
-            if (!_userName.Value.StartsWith(domainPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                const string msg = "Current identity is not authenticated in current domain.";
-                _logger.Trace(() => msg + " Identity: '" + _userName.Value + "', domain: '" + Environment.UserDomainName + "'.");
-                throw new FrameworkException(msg);
-            }
-
-            var name = _userName.Value.Substring(domainPrefix.Length);
-            _logger.Trace(() => "Identity without domain: " + name);
-            return name;
-        }
-
-        public bool IsBuiltInAdministrator()
-        {
-            // WARNING: When making any changes to this function, please make sure that it works correctly when the process is run on IIS with the "ApplicationPoolIdentity".
-            if (!_isUserRecognized.Value)
-                return false;
-            WindowsPrincipal principal = new WindowsPrincipal(_windowsIdentity.Value);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-
-        public IList<string> GetIdentityMembership()
-        {
-            CheckIfUserRecognized();
-            var stopwatch = Stopwatch.StartNew();
-
-            // Search user's domain groups:
-
-            var userNestedMembership = new List<string>();
-
-            DirectoryEntry domainConnection = new DirectoryEntry("LDAP://" + Environment.UserDomainName);
-            DirectorySearcher searcher = new DirectorySearcher(domainConnection);
-            searcher.Filter = "(samAccountName=" + _accountName.Value + ")";
-            searcher.PropertiesToLoad.Add("name");
-
-            SearchResult searchResult = searcher.FindOne();
-            if (searchResult != null)
-            {
-                _logger.Trace("Found Active Directory entry: " + searchResult.Path);
-
-                userNestedMembership.Add(_accountName.Value);
-
-                DirectoryEntry theUser = searchResult.GetDirectoryEntry();
-                theUser.RefreshCache(new[] { "tokenGroups" });
-
-                foreach (byte[] resultBytes in theUser.Properties["tokenGroups"])
-                {
-                    // Search domain group's name and displayName:
-
-                    var mySID = new SecurityIdentifier(resultBytes, 0);
-
-                    _logger.Trace(() => string.Format("User '{0}' is a member of group with objectSid '{1}'.", _accountName.Value, mySID.Value));
-
-                    DirectorySearcher sidSearcher = new DirectorySearcher(domainConnection);
-                    sidSearcher.Filter = "(objectSid=" + mySID.Value + ")";
-                    sidSearcher.PropertiesToLoad.Add("name");
-                    sidSearcher.PropertiesToLoad.Add("displayname");
-
-                    SearchResult sidResult = sidSearcher.FindOne();
-                    if (sidResult != null)
-                    {
-                        string name = sidResult.Properties["name"][0].ToString();
-                        userNestedMembership.Add(name);
-                        _logger.Trace(() => string.Format("Added membership to group with name '{0}' for user '{1}'.", name, _accountName.Value));
-
-                        var displayNameProperty = sidResult.Properties["displayname"];
-                        if (displayNameProperty.Count > 0)
-                        {
-                            string displayName = displayNameProperty[0].ToString();
-                            if (!string.Equals(name, displayName))
-                            {
-                                userNestedMembership.Add(displayName);
-                                _logger.Trace(() => string.Format("Added membership to group with display name '{0}' for user '{1}'.", displayName, _accountName.Value));
-                            }
-                        }
-                    }
-                    else
-                        _logger.Trace(() => string.Format("Cannot find active directory enity for user's '{0}' parent group with objectSid '{1}'.", _accountName.Value, mySID.Value));
-                }
-            }
-            else
-                _logger.Trace(() => string.Format("Account name '{0}' not found on Active Directory for domain '{1}'.", _accountName.Value, Environment.UserDomainName));
-
-            _performanceLogger.Write(stopwatch, "DomainPrincipalProvider.GetIdentityMembership() done.");
-            return userNestedMembership;
         }
     }
 }

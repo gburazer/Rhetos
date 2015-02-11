@@ -30,42 +30,39 @@ namespace Rhetos.Dsl.DefaultConcepts
 {
     public static class SqlAnalysis
     {
-        private static Dictionary<string, HashSet<string>> SqlObjectsCache = new Dictionary<string, HashSet<string>>();
+        private static Dictionary<string, SortedSet<string>> SqlObjectsCache = new Dictionary<string, SortedSet<string>>();
 
-        public static IEnumerable<IConceptInfo> GenerateDependencies(IConceptInfo dependent, IEnumerable<IConceptInfo> existingConcepts, string sqlScript)
+        public static IEnumerable<IConceptInfo> GenerateDependencies(IConceptInfo dependent, IDslModel existingConcepts, string sqlScript)
         {
-            HashSet<string> sqlObjects;
-            if (!SqlObjectsCache.TryGetValue(sqlScript, out sqlObjects))
+            SortedSet<string> sqlObjectsInScript;
+            if (!SqlObjectsCache.TryGetValue(sqlScript, out sqlObjectsInScript))
             {
-                sqlObjects = new HashSet<string>(ExtractPossibleObjects(sqlScript));
-                SqlObjectsCache.Add(sqlScript, sqlObjects);
+                sqlObjectsInScript = new SortedSet<string>(ExtractPossibleObjects(sqlScript), StringComparer.InvariantCultureIgnoreCase);
+                SqlObjectsCache.Add(sqlScript, sqlObjectsInScript);
             }
 
             var newConcepts = new List<IConceptInfo>();
-            foreach (var conceptInfo in existingConcepts)
-                if (conceptInfo != dependent)
-                {
-                    var conceptType = conceptInfo.GetType();
-                    if (typeof(DataStructureInfo).IsAssignableFrom(conceptType))
+
+            var conceptsBySqlName = existingConcepts.GetIndex<SqlObjectsIndex>().ConceptsBySqlName;
+
+            foreach (var sqlObjectInScript in sqlObjectsInScript)
+                foreach (var conceptInfo in conceptsBySqlName.Get(sqlObjectInScript))
+                    if (conceptInfo != dependent)
                     {
-                        if (sqlObjects.Contains(conceptInfo.GetKeyProperties())) // Currently, GetKeyProperties is not cached, so checking Contains after IsAssignableFrom improves execution speed.
+                        if (conceptInfo is DataStructureInfo)
                             newConcepts.Add(new SqlDependsOnDataStructureInfo { Dependent = dependent, DependsOn = (DataStructureInfo)conceptInfo });
-                    }
-                    else if (typeof(SqlViewInfo).IsAssignableFrom(conceptType))
-                    {
-                        if (sqlObjects.Contains(conceptInfo.GetKeyProperties()))
+                        else if (conceptInfo is SqlViewInfo)
                             newConcepts.Add(new SqlDependsOnSqlViewInfo { Dependent = dependent, DependsOn = (SqlViewInfo)conceptInfo });
-                    }
-                    else if (typeof(SqlFunctionInfo).IsAssignableFrom(conceptType))
-                    {
-                        if (sqlObjects.Contains(conceptInfo.GetKeyProperties()))
+                        else if (conceptInfo is SqlFunctionInfo)
                             newConcepts.Add(new SqlDependsOnSqlFunctionInfo { Dependent = dependent, DependsOn = (SqlFunctionInfo)conceptInfo });
+                        else
+                            throw new DslSyntaxException(dependent, "Internal error: Unexpected SQL concept type: " + conceptInfo.GetUserDescription() + ".");
                     }
-                }
+
             return newConcepts;
         }
 
-        public static IEnumerable<IConceptInfo> GenerateDependenciesToObject(IConceptInfo dependent, IEnumerable<IConceptInfo> existingConcepts, string sqlObjectName)
+        public static IEnumerable<IConceptInfo> GenerateDependenciesToObject(IConceptInfo dependent, IDslModel existingConcepts, string sqlObjectName)
         {
             var newConcepts = new List<IConceptInfo>();
 
@@ -80,18 +77,24 @@ namespace Rhetos.Dsl.DefaultConcepts
 
             if (function)
             {
-                newConcepts.AddRange(existingConcepts.OfType<SqlFunctionInfo>()
-                    .Where(ci => ci.Module.Name == nameParts[0] && ci.Name == nameParts[1] && ci != dependent)
+                newConcepts.AddRange(existingConcepts.FindByType<SqlFunctionInfo>()
+                    .Where(ci => ci.Module.Name.Equals(nameParts[0], StringComparison.InvariantCultureIgnoreCase)
+                        && ci.Name.Equals(nameParts[1], StringComparison.InvariantCultureIgnoreCase)
+                        && ci != dependent)
                     .Select(ci => new SqlDependsOnSqlFunctionInfo { Dependent = dependent, DependsOn = ci }));
             }
             else
             {
-                newConcepts.AddRange(existingConcepts.OfType<DataStructureInfo>()
-                    .Where(ci => ci.Module.Name == nameParts[0] && ci.Name == nameParts[1] && ci != dependent)
+                newConcepts.AddRange(existingConcepts.FindByType<DataStructureInfo>()
+                    .Where(ci => ci.Module.Name.Equals(nameParts[0], StringComparison.InvariantCultureIgnoreCase)
+                        && ci.Name.Equals(nameParts[1], StringComparison.InvariantCultureIgnoreCase)
+                        && ci != dependent)
                     .Select(ci => new SqlDependsOnDataStructureInfo { Dependent = dependent, DependsOn = ci }));
 
-                newConcepts.AddRange(existingConcepts.OfType<SqlViewInfo>()
-                    .Where(ci => ci.Module.Name == nameParts[0] && ci.Name == nameParts[1] && ci != dependent)
+                newConcepts.AddRange(existingConcepts.FindByType<SqlViewInfo>()
+                    .Where(ci => ci.Module.Name.Equals(nameParts[0], StringComparison.InvariantCultureIgnoreCase)
+                        && ci.Name.Equals(nameParts[1], StringComparison.InvariantCultureIgnoreCase)
+                        && ci != dependent)
                     .Select(ci => new SqlDependsOnSqlViewInfo { Dependent = dependent, DependsOn = ci }));
             }
 
@@ -121,7 +124,8 @@ namespace Rhetos.Dsl.DefaultConcepts
                         if (end != -1) end++;
                         break;
                     case '[':
-                        while (true) {
+                        while (true)
+                        {
                             end = sql.IndexOf(']', end);
                             if (end != -1) end++;
                             if (TryGet(sql, end) == ']') { end++; continue; }
@@ -147,7 +151,7 @@ namespace Rhetos.Dsl.DefaultConcepts
                         while (depth > 0)
                         {
                             end = sql.IndexOfAny(MultilineCommentChars, end);
-                            if (end == -1) break; 
+                            if (end == -1) break;
                             char first = sql[end++];
                             if (first == '/')
                             {
@@ -202,7 +206,7 @@ namespace Rhetos.Dsl.DefaultConcepts
             if (firstFrom.Success)
                 Extract(sql, sqlObjects, crossJoinRegex, firstFrom.Index + firstFrom.Length);
 
-            return sqlObjects.Distinct().OrderBy(x=>x).ToList();
+            return sqlObjects.Distinct().OrderBy(x => x).ToList();
         }
 
         private static void Extract(string sql, List<string> sqlObjects, Regex regex, int startPosition = 0)

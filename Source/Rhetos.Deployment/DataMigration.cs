@@ -70,23 +70,20 @@ namespace Rhetos.Deployment
 
     public class DataMigrationReport
     {
-        public string Message;
         public List<string> CreatedTags;
-        public override string ToString()
-        {
-            return Message;
-        }
     }
 
     public class DataMigration
     {
         protected readonly ISqlExecuter _sqlExecuter;
         protected readonly ILogger _logger;
+        protected readonly ILogger _deployPackagesLogger;
 
         public DataMigration(ISqlExecuter sqlExecuter, ILogProvider logProvider)
         {
             _sqlExecuter = sqlExecuter;
             _logger = logProvider.GetLogger("DataMigration");
+            _deployPackagesLogger = logProvider.GetLogger("DeployPackages");
         }
 
         public DataMigrationReport ExecuteDataMigrationScripts(string dataMigrationScriptsFolder)
@@ -108,15 +105,17 @@ namespace Rhetos.Deployment
             List<DataMigrationScript> toRemove = oldScripts.Where(os => !newIndex.Contains(os.Tag)).ToList();
             List<DataMigrationScript> toExecute = newScripts.Where(ns => !oldIndex.Contains(ns.Tag)).Except(skipped).ToList();
             LogScripts("Skipped older script", skipped, EventType.Info);
-            LogScripts("Removed scripts", toRemove, EventType.Info);
-            LogScripts("Executing script", toExecute, EventType.Info);
+            LogScripts("Removing", toRemove, EventType.Info);
+            LogScripts("Executing", toExecute, EventType.Info);
 
             ApplyToDatabase(toRemove, toExecute);
 
             string report = string.Format("Executed {0} of {1} scripts.", toExecute.Count, newScripts.Count);
             if (skipped.Count > 0)
                 report = report + " " + skipped.Count + " older skipped.";
-            return new DataMigrationReport { Message = report, CreatedTags = toExecute.Select(s => s.Tag).ToList() };
+            _deployPackagesLogger.Trace(report);
+
+            return new DataMigrationReport { CreatedTags = toExecute.Select(s => s.Tag).ToList() };
         }
 
         public void UndoDataMigrationScripts(List<string> createdTags)
@@ -199,7 +198,7 @@ namespace Rhetos.Deployment
             foreach (var script in scripts)
             {
                 var s = script;
-                _logger.Write(eventType, () => msg + ": " + s.Tag + " " + s.Path);
+                _logger.Write(eventType, () => msg + " " + s.Tag + " " + s.Path);
             }
         }
 
@@ -221,10 +220,10 @@ namespace Rhetos.Deployment
         {
             var files = Directory.GetFiles(dataMigrationScriptsFolder, "*.*", SearchOption.AllDirectories);
 
-            const string expectedExtention = ".sql";
-            var badFile = files.FirstOrDefault(file => Path.GetExtension(file).ToLower() != expectedExtention);
+            const string expectedExtension = ".sql";
+            var badFile = files.FirstOrDefault(file => Path.GetExtension(file).ToLower() != expectedExtension);
             if (badFile != null)
-                throw new FrameworkException("Data migration script '"+ badFile +"' does not have expected extention '" + expectedExtention + "'.");
+                throw new FrameworkException("Data migration script '"+ badFile +"' does not have expected extension '" + expectedExtension + "'.");
 
             int baseFolderLength = GetFullPathLength(dataMigrationScriptsFolder);
 

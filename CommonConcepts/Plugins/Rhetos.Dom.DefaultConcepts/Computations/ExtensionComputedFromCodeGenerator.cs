@@ -36,8 +36,10 @@ namespace Rhetos.Dom.DefaultConcepts
         public void GenerateCode(IConceptInfo conceptInfo, ICodeBuilder codeBuilder)
         {
             var info = (ExtensionComputedFromInfo)conceptInfo;
-            codeBuilder.InsertCode(@",
-                                    Base = sourceEnum.Current.Base", EntityComputedFromCodeGenerator.ClonePropertyTag, info.EntityComputedFrom);
+            codeBuilder.InsertCode(
+                "Base = sourceItem.Base,\r\n                ",
+                EntityComputedFromCodeGenerator.ClonePropertyTag,
+                info.EntityComputedFrom);
         }
     }
 }

@@ -48,37 +48,13 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
             var info = (AutoCodeForEachInfo) conceptInfo;
             createdDependencies = null;
 
-            if (AutoCodeDatabaseDefinition.IsSupported(info.Property))
+            if (AutoCodeTriggerDatabaseDefinition.IsSupported(info.Property.DataStructure))
             {
-                codeBuilder.InsertCode(Sql.Format("AutoCodeForEachDatabaseDefinition_ExtendBeforeCursor", ShortStringPropertyInfo.MaxLength),
-                    AutoCodeDatabaseDefinition.BeforeCursorTag, info);
-
-                string resourceName = GetResourceNameForCursorSelectSnippet(info.Group);
-                codeBuilder.InsertCode(Sql.Format(resourceName, GetColumnName(info.Group), ShortStringPropertyInfo.MaxLength),
-                    AutoCodeDatabaseDefinition.CursorSelectTag, info);
-
-                codeBuilder.InsertCode(Sql.Format("AutoCodeForEachDatabaseDefinition_ExtendCursorFetch", GetColumnName(info.Group), ShortStringPropertyInfo.MaxLength),
-                    AutoCodeDatabaseDefinition.CursorFetchTag, info);
-
-                codeBuilder.InsertCode(Sql.Format("AutoCodeForEachDatabaseDefinition_ExtendBeforeGenerate", GetColumnName(info.Group), ShortStringPropertyInfo.MaxLength),
-                    AutoCodeDatabaseDefinition.BeforeGenerateTag, info);
+                codeBuilder.InsertCode(Sql.Format("AutoCodeForEachDatabaseDefinition_ExtendCursorGroupValue", GetColumnName(info.Group), ShortStringPropertyInfo.MaxLength),
+                    AutoCodeDatabaseDefinition.ForEachGroupValueTag, info);
+                codeBuilder.InsertCode("+'" + GetColumnName(info.Group) + "'",
+                    AutoCodeDatabaseDefinition.ForEachGroupColumnTag, info);
             }
-        }
-
-        private static string GetResourceNameForCursorSelectSnippet(PropertyInfo groupProperty)
-        {
-            var resourceName = "AutoCodeForEachDatabaseDefinition_ExtendCursorSelect_" + groupProperty.GetType().Name;
-            try
-            {
-                Sql.Get(resourceName);
-            }
-            catch (Exception ex)
-            {
-                throw new FrameworkException(
-                    "Group property type '" + groupProperty.GetType().Name +
-                    "' is not supported in AutoCodeForEachDatabaseDefinition. " + ex.Message, ex);
-            }
-            return resourceName;
         }
 
         private static string GetColumnName(PropertyInfo property)

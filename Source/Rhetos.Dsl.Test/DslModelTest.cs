@@ -17,14 +17,14 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System.Text;
-using Rhetos.Utilities;
-using Rhetos.Dsl;
+using Autofac.Features.Indexed;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Rhetos.Extensibility;
+using Rhetos.TestCommon;
+using Rhetos.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Rhetos.TestCommon;
 
 namespace Rhetos.Dsl.Test
 {
@@ -100,9 +100,41 @@ namespace Rhetos.Dsl.Test
             public IEnumerable<IConceptInfo> ParsedConcepts { get { return _rawConcepts; } }
         }
 
+        internal class StubMacroIndex : IIndex<Type, IEnumerable<IConceptMacro>>
+        {
+            public bool TryGetValue(Type key, out IEnumerable<IConceptMacro> value)
+            {
+                value = new IConceptMacro[] { };
+                return true;
+            }
+
+            public IEnumerable<IConceptMacro> this[Type key]
+            {
+                get { return new IConceptMacro[] { }; }
+            }
+        }
+
+        internal class StubMacroOrderRepository : IMacroOrderRepository
+        {
+            public List<MacroOrder> Load() { return new List<MacroOrder>(); }
+            public void Save(IEnumerable<MacroOrder> macroOrders) { }
+        }
+
+        internal class StubDslModelFile : IDslModelFile
+        {
+            public void SaveConcepts(IEnumerable<IConceptInfo> concepts) { }
+        }
+
+        static IDslModel NewDslModel(IDslParser parser, IEnumerable<IConceptInfo> conceptPrototypes)
+        {
+            var dslContainter = new DslContainer(new ConsoleLogProvider(), new PluginsContainerMock<IDslModelIndex>(new DslModelIndexByType()));
+            var dslModel = new DslModel(parser, new ConsoleLogProvider(), dslContainter, new StubMacroIndex(), new IConceptMacro[] { }, conceptPrototypes, new StubMacroOrderRepository(), new StubDslModelFile());
+            return dslModel;
+        }
+
         static List<IConceptInfo> DslModelFromConcepts(IEnumerable<IConceptInfo> rawConcepts)
         {
-            var dslModel = new DslModel(new StubDslParser(rawConcepts), new ConsoleLogProvider());
+            var dslModel = NewDslModel(new StubDslParser(rawConcepts), rawConcepts);
             return dslModel.Concepts.ToList();
         }
 
@@ -112,7 +144,7 @@ namespace Rhetos.Dsl.Test
             Console.WriteLine("Parsed concepts:");
             Console.WriteLine(string.Join(Environment.NewLine, nullDslParser.ParsedConcepts.Select(ci => " - " + ci.GetShortDescription())));
 
-            var dslModel = new DslModel(nullDslParser, new ConsoleLogProvider());
+            var dslModel = NewDslModel(nullDslParser, conceptInfoPluginsForGenericParser);
             return dslModel.Concepts.ToList();
         }
 
@@ -181,28 +213,17 @@ namespace Rhetos.Dsl.Test
         }
 
         [TestMethod()]
-        [ExpectedException(typeof(DslSyntaxException))]
         public void ReplaceReferencesWithFullConcepts_UnresolvedReference()
         {
-            try
-            {
-                List<IConceptInfo> concepts = new List<IConceptInfo>();
-                concepts.Add(new SimpleConceptInfo("ax", "aaa"));
-                concepts.Add(new SimpleConceptInfo("cx", "ccc"));
-                RefConceptInfo ci = new RefConceptInfo("rx", new SimpleConceptInfo("bx", null));
-                concepts.Add(ci);
+            List<IConceptInfo> concepts = new List<IConceptInfo>();
+            concepts.Add(new SimpleConceptInfo("ax", "aaa"));
+            concepts.Add(new SimpleConceptInfo("cx", "ccc"));
+            RefConceptInfo ci = new RefConceptInfo("rx", new SimpleConceptInfo("bx", null));
+            concepts.Add(ci);
 
-                DslModelFromConcepts(concepts);
-            }
-            catch (Exception ex)
-            {
-                Assert.IsTrue(ex.Message.Contains("eferenc"), "Must contain explanation about \"references\".");
-                Assert.IsTrue(ex.Message.Contains("RefConceptInfo"));
-                Assert.IsTrue(ex.Message.Contains("SimpleConceptInfo"));
-                Assert.IsTrue(ex.Message.Contains("rx"));
-                Assert.IsTrue(ex.Message.Contains("bx"));
-                throw;
-            }
+            TestUtility.ShouldFail<DslSyntaxException>(
+                () => DslModelFromConcepts(concepts),
+                "reference", "RefConceptInfo", "Simple", "rx", "bx");
         }
 
         [TestMethod()]

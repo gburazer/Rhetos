@@ -28,9 +28,9 @@ using Rhetos.Extensibility;
 using Rhetos.Logging;
 using Rhetos.TestCommon;
 using Rhetos.DatabaseGenerator;
-using Autofac.Features.Metadata;
 using System.Text;
 using Autofac.Features.Indexed;
+using Autofac.Features.Metadata;
 
 namespace Rhetos.DatabaseGenerator.Test
 {
@@ -309,9 +309,9 @@ namespace Rhetos.DatabaseGenerator.Test
                 oldApplications, newApplications,
                 out toBeRemoved, out toBeInserted,
                 new ConsoleLogger());
-            DirectedGraph.TopologicalSort(toBeRemoved, DatabaseGenerator_Accessor.GetDependencyPairs(oldApplications));
+            Graph.TopologicalSort(toBeRemoved, DatabaseGenerator_Accessor.GetDependencyPairs(oldApplications));
             toBeRemoved.Reverse();
-            DirectedGraph.TopologicalSort(toBeInserted, DatabaseGenerator_Accessor.GetDependencyPairs(newApplications));
+            Graph.TopologicalSort(toBeInserted, DatabaseGenerator_Accessor.GetDependencyPairs(newApplications));
         }
 
         #endregion
@@ -605,6 +605,11 @@ namespace Rhetos.DatabaseGenerator.Test
             public MockDslModel(IEnumerable<IConceptInfo> conceptInfos) { _conceptInfos = conceptInfos; }
             public IEnumerable<IConceptInfo> Concepts { get { return _conceptInfos; } }
             public IConceptInfo FindByKey(string conceptKey) { throw new NotImplementedException(); }
+            public IEnumerable<IConceptInfo> FindByType(Type conceptType) { throw new NotImplementedException(); }
+            public T GetIndex<T>() where T : IDslModelIndex
+            {
+                throw new NotImplementedException();
+            }
         }
 
         private class ExtendingConceptImplementation : IConceptDatabaseDefinition, IConceptDatabaseDefinitionExtension

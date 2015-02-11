@@ -41,13 +41,24 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
         /// <summary>Ordering of options may be important./summary>
         public static readonly SqlTag<PropertyInfo> Options2Tag = "Options2";
 
-        public static string AddColumn(PropertyInfo property, string columnName, string type, string options = "")
+        public static readonly ConceptMetadataType<List<string>> ColumnNamesMetadata = new ConceptMetadataType<List<string>>("ColumnNames");
+        public static readonly ConceptMetadataType<List<string>> ColumnTypesMetadata = new ConceptMetadataType<List<string>>("ColumnTypes");
+
+        public static void RegisterColumnMetadata(ConceptMetadata conceptMetadata, PropertyInfo property, string columnName, string columnType)
         {
+            conceptMetadata.Set(property, ColumnNamesMetadata, new List<string> { columnName });
+            conceptMetadata.Set(property, ColumnTypesMetadata, new List<string> { columnType });
+        }
+
+        public static string AddColumn(ConceptMetadata conceptMetadata, PropertyInfo property, string options = "")
+        {
+            string columnName = conceptMetadata.Get(property, ColumnNamesMetadata).Single();
+
             return Sql.Format("PropertyDatabaseDefinition_AddColumn",
                 SqlUtility.Identifier(property.DataStructure.Module.Name),
                 SqlUtility.Identifier(property.DataStructure.Name),
-                SqlUtility.CheckIdentifier(columnName),
-                type,
+                DslUtility.ValidateIdentifier(columnName, property, "Invalid column name."),
+                conceptMetadata.Get(property, ColumnTypesMetadata).Single(),
                 options,
                 Options1Tag.Evaluate(property),
                 Options2Tag.Evaluate(property));
@@ -58,7 +69,7 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
             return Sql.Format("PropertyDatabaseDefinition_RemoveColumn",
                 SqlUtility.Identifier(property.DataStructure.Module.Name),
                 SqlUtility.Identifier(property.DataStructure.Name),
-                SqlUtility.CheckIdentifier(columnName));
+                DslUtility.ValidateIdentifier(columnName, property, "Invalid column name."));
         }
     }
 }

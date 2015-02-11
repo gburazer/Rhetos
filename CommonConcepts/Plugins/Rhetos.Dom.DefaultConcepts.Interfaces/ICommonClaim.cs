@@ -28,5 +28,6 @@ namespace Rhetos.Dom.DefaultConcepts
     {
         string ClaimResource { get; set; }
         string ClaimRight { get; set; }
+        bool? Active { get; set; }
     }
 }

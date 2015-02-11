@@ -26,35 +26,42 @@ using Autofac.Features.Indexed;
 using Rhetos.Dom.DefaultConcepts;
 using Rhetos.Extensibility;
 using Rhetos.Dom;
+using Rhetos.Logging;
 
 namespace Rhetos.Processing.DefaultCommands
 {
+    [Obsolete("Use ReadCommand")]
     [Export(typeof(ICommandImplementation))]
     [ExportMetadata(MefProvider.Implements, typeof(QueryDataSourceCommandInfo))]
     public class QueryDataSourceCommand : ICommandImplementation
     {
         private readonly IDataTypeProvider _dataTypeProvider;
-        private readonly IIndex<string, IQueryDataSourceCommandImplementation> _repositories;
+        private readonly GenericRepositories _repositories;
+        private readonly ServerCommandsUtility _serverCommandsUtility;
 
         public QueryDataSourceCommand(
             IDataTypeProvider dataTypeProvider,
-            IIndex<string, IQueryDataSourceCommandImplementation> repositories)
+            GenericRepositories repositories,
+            ServerCommandsUtility serverCommandsUtility)
         {
             _dataTypeProvider = dataTypeProvider;
             _repositories = repositories;
+            _serverCommandsUtility = serverCommandsUtility;
         }
 
         public CommandResult Execute(ICommandInfo commandInfo)
         {
-            var info = (QueryDataSourceCommandInfo) commandInfo;
+            var info = (QueryDataSourceCommandInfo)commandInfo;
 
-            var repository = _repositories[info.DataSource];
-            var result = repository.QueryData(info);
+            var genericRepository = _repositories.GetGenericRepository(info.DataSource);
+            var readCommandInfo = info.ToReadCommandInfo();
+            ReadCommandResult readCommandResult = _serverCommandsUtility.ExecuteReadCommand(readCommandInfo, genericRepository);
 
+            var result = QueryDataSourceCommandResult.FromReadCommandResult(readCommandResult);
             return new CommandResult
             {
                 Data = _dataTypeProvider.CreateBasicData(result),
-                Message = result.Records.Length + " row(s) found",
+                Message = (result.Records != null ? result.Records.Length.ToString() : result.TotalRecords.ToString()) + " row(s) found",
                 Success = true
             };
         }

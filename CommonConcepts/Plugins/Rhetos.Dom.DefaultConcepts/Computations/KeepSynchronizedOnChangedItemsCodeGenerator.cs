@@ -50,9 +50,6 @@ namespace Rhetos.Dom.DefaultConcepts
             codeBuilder.InsertCode(
                 FilterLoadFunction(info.UpdateOnChange.DependsOn, info.UpdateOnChange.FilterType, info.UpdateOnChange.FilterFormula, uniqueName),
                 RepositoryHelper.RepositoryMembers, info.UpdateOnChange.DependsOn);
-
-            if (!string.IsNullOrWhiteSpace(info.FilterSaveExpression))
-                codeBuilder.InsertCode(FilterSaveFunction(info, uniqueName), RepositoryHelper.RepositoryMembers, info.UpdateOnChange.DependsOn);
         }
 
         private static int _uniqueNumber = 1;
@@ -70,22 +67,21 @@ namespace Rhetos.Dom.DefaultConcepts
         {
             return string.Format(
 @"            {{
-                var filteredNew = _filterLoadKeepSynchronizedOnChangedItems{0}(inserted.Concat(updated).ToArray());
-                _domRepository.{1}.{2}.{6}(filterKeepSynchronizedOnChangedItems{0}Old{3});
-                _domRepository.{1}.{2}.{6}(filteredNew{3});
+                var filteredNew = _filterLoadKeepSynchronizedOnChangedItems{0}(inserted.Concat(updated).ToList());
+                _domRepository.{1}.{2}.{5}(filterKeepSynchronizedOnChangedItems{0}Old);
+                _domRepository.{1}.{2}.{5}(filteredNew);
                 
                 // Workaround to restore NH proxies after using NHSession.Clear() when saving data in Recompute().
-                for (int i=0; i<inserted.Length; i++) inserted[i] = _executionContext.NHibernateSession.Load<{4}.{5}>(inserted[i].ID);
-                for (int i=0; i<updated.Length; i++) updated[i] = _executionContext.NHibernateSession.Load<{4}.{5}>(updated[i].ID);
+                for (int i=0; i<inserted.Length; i++) inserted[i] = _executionContext.NHibernateSession.Load<{3}.{4}>(inserted[i].ID);
+                for (int i=0; i<updated.Length; i++) updated[i] = _executionContext.NHibernateSession.Load<{3}.{4}>(updated[i].ID);
             }}
 ",
                 uniqueName,
-                info.EntityComputedFrom.Target.Module.Name,
-                info.EntityComputedFrom.Target.Name,
-                !string.IsNullOrWhiteSpace(info.FilterSaveExpression) ? (", _filterSaveKeepSynchronizedOnChangedItems" + uniqueName) : "",
+                info.KeepSynchronized.EntityComputedFrom.Target.Module.Name,
+                info.KeepSynchronized.EntityComputedFrom.Target.Name,
                 info.UpdateOnChange.DependsOn.Module.Name,
                 info.UpdateOnChange.DependsOn.Name,
-                EntityComputedFromInfo.RecomputeFunctionName(info.EntityComputedFrom));
+                EntityComputedFromCodeGenerator.RecomputeFunctionName(info.KeepSynchronized.EntityComputedFrom));
         }
 
         private static string FilterLoadFunction(DataStructureInfo hookOnSaveEntity, string filterType, string filterFormula, string uniqueName)
@@ -100,16 +96,6 @@ namespace Rhetos.Dom.DefaultConcepts
                 filterType,
                 uniqueName,
                 filterFormula);
-        }
-
-        private static string FilterSaveFunction(KeepSynchronizedOnChangedItemsInfo info, string uniqueName)
-        {
-            return string.Format(
-@"        private static readonly Func<IEnumerable<{0}.{1}>, IEnumerable<{0}.{1}>> _filterSaveKeepSynchronizedOnChangedItems{2} =
-            {3};
-
-",
-                info.EntityComputedFrom.Target.Module.Name, info.EntityComputedFrom.Target.Name, uniqueName, info.FilterSaveExpression);
         }
     }
 }

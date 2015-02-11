@@ -24,9 +24,19 @@ using System.Text;
 
 namespace Rhetos.Processing.DefaultCommands
 {
+    [Obsolete("Use ReadCommand")]
     public class QueryDataSourceCommandResult
     {
         public object[] Records { get; set; }
         public int TotalRecords { get; set; }
+
+        public static QueryDataSourceCommandResult FromReadCommandResult(ReadCommandResult readCommandResult)
+        {
+            return new QueryDataSourceCommandResult
+            {
+                Records = readCommandResult.Records,
+                TotalRecords = readCommandResult.TotalCount.Value
+            };
+        }
     }
 }

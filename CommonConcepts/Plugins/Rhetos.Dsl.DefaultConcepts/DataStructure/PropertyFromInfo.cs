@@ -21,52 +21,46 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 
 namespace Rhetos.Dsl.DefaultConcepts
 {
     [Export(typeof(IConceptInfo))]
     [ConceptKeyword("PropertyFrom")]
-    public class PropertyFromInfo : IMacroConcept
+    public class PropertyFromInfo : IConceptInfo
     {
         [ConceptKey]
         public DataStructureInfo Destination { get; set; }
 
         [ConceptKey]
         public PropertyInfo Source { get; set; }
+    }
 
-        public IEnumerable<IConceptInfo> CreateNewConcepts(IEnumerable<IConceptInfo> existingConcepts)
+    [Export(typeof(IConceptMacro))]
+    public class PropertyFromMacro : IConceptMacro<PropertyFromInfo>
+    {
+        public IEnumerable<IConceptInfo> CreateNewConcepts(PropertyFromInfo conceptInfo, IDslModel existingConcepts)
         {
             var newConcepts = new List<IConceptInfo>();
 
-            var cloneMethod = typeof(object).GetMethod("MemberwiseClone", BindingFlags.NonPublic | BindingFlags.Instance);
-            var property = (PropertyInfo)cloneMethod.Invoke(Source, null);
-            property.DataStructure = Destination;
+            var property = DslUtility.CreatePassiveClone(conceptInfo.Source, conceptInfo.Destination);
             newConcepts.Add(property);
 
-            //var destinationEntity = Destination as EntityInfo;
-            //if (destinationEntity != null)
-            //{
-
-            var required = existingConcepts.OfType<RequiredPropertyInfo>().Where(ci => ci.Property == Source)
+            var required = existingConcepts.FindByReference<RequiredPropertyInfo>(ci => ci.Property, conceptInfo.Source)
                 .Select(ci => new RequiredPropertyInfo { Property = property })
                 .SingleOrDefault();
             if (required != null)
                 newConcepts.Add(required);
 
-            var destinationProperties = new HashSet<string>(
-                existingConcepts.OfType<PropertyInfo>()
-                    .Where(ci => ci.DataStructure == Destination)
-                    .Select(ci => ci.Name));
-
-            if (SqlIndexMultipleInfo.IsSupported(Destination))
-                foreach (var sourceIndex in existingConcepts.OfType<SqlIndexMultipleInfo>().Where(ci => ci.Entity == Source.DataStructure))
+            if (SqlIndexMultipleInfo.IsSupported(conceptInfo.Destination))
+                foreach (var sourceIndex in existingConcepts.FindByReference<SqlIndexMultipleInfo>(ci => ci.Entity, conceptInfo.Source.DataStructure))
                 {
                     var indexProperties = sourceIndex.PropertyNames.Split(' ');
                     if (property.Name == indexProperties.FirstOrDefault()
-                        && indexProperties.Skip(1).All(indexProperty => destinationProperties.Contains(indexProperty)))
-                        newConcepts.Add(new SqlIndexMultipleInfo { Entity = Destination, PropertyNames = sourceIndex.PropertyNames });
+                        && indexProperties.Skip(1).All(indexProperty =>
+                            DslUtility.FindProperty(existingConcepts, conceptInfo.Destination, indexProperty) != null))
+                    {
+                        newConcepts.Add(new SqlIndexMultipleInfo { Entity = conceptInfo.Destination, PropertyNames = sourceIndex.PropertyNames });
+                    }
                 }
 
             return newConcepts;

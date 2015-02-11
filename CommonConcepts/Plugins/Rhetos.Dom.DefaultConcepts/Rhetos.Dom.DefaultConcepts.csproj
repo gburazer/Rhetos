@@ -20,6 +20,8 @@
     </SccAuxPath>
     <SccProvider>
     </SccProvider>
+    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\..\</SolutionDir>
+    <RestorePackages>true</RestorePackages>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -39,9 +41,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Autofac, Version=2.5.2.830, Culture=neutral, PublicKeyToken=17863af14b0044da, processorArchitecture=MSIL">
-      <HintPath>..\..\..\External\Autofac\Autofac.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Autofac">
+      <HintPath>..\..\..\packages\Autofac.3.5.2\lib\net40\Autofac.dll</HintPath>
     </Reference>
     <Reference Include="NHibernate, Version=3.3.1.4000, Culture=neutral, PublicKeyToken=aa95f207798dfdb4, processorArchitecture=MSIL">
       <HintPath>..\..\..\External\NHibernate\NHibernate.dll</HintPath>
@@ -59,25 +60,38 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ClaimGenerator.cs" />
+    <Compile Include="AutofacModuleConfiguration.cs" />
+    <Compile Include="Computations\ComposableFilterUseExecutionContextCodeGenerator.cs" />
+    <Compile Include="Computations\ComputeForNewItemsCodeGenerator.cs" />
+    <Compile Include="Computations\ApplyFilterOnClientReadCodeGenerator.cs" />
+    <Compile Include="Computations\KeepSynchronizedCodeGenerator.cs" />
+    <Compile Include="Computations\KeepSynchronizedRecomputeOnDeployInfrastructureCodeGenerator.cs" />
+    <Compile Include="Computations\KeyPropertyIDComputedFromCodeGenerator.cs" />
+    <Compile Include="Computations\KeyPropertyComputedFromCodeGenerator.cs" />
+    <Compile Include="Computations\KeepSynchronizedRecomputeOnDeployCodeGenerator.cs" />
+    <Compile Include="Computations\LockItemsLockPropertyCodeGenerator.cs" />
+    <Compile Include="DataStructure\FilterIdRepositoryCodeGenerator.cs" />
     <Compile Include="DataStructure\ImplementsInterfacePropertyCodeGenerator.cs" />
+    <Compile Include="DataStructure\DomInitializationCodeGenerator.cs" />
     <Compile Include="DataStructure\RegisteredInterfaceImplementationCodeGenerator.cs" />
     <Compile Include="DataStructure\WriteCodeGenerator.cs" />
     <Compile Include="Advanced\EntityHistoryAllPropertiesCodeGenerator.cs" />
     <Compile Include="Advanced\EntityHistoryPropertyCodeGenerator.cs" />
     <Compile Include="Advanced\EntityHistoryCodeGenerator.cs" />
     <Compile Include="Computations\EntityComputedFromCodeGenerator.cs" />
-    <Compile Include="Computations\LockItemsForPropertyCodeGenerator.cs" />
+    <Compile Include="Computations\LockItemsMarkPropertyCodeGenerator.cs" />
     <Compile Include="Computations\DenySaveForPropertyCodeGenerator.cs" />
     <Compile Include="Computations\LockPropertyCodeGenerator.cs" />
     <Compile Include="Computations\HierarchySingleRootInternalCodeGenerator.cs" />
     <Compile Include="Computations\ReportFileCodeGenerator.cs" />
     <Compile Include="Computations\ReportDataSourceCodeGenerator.cs" />
     <Compile Include="Computations\LockItemsCodeGenerator.cs" />
+    <Compile Include="Computations\LockItemsExceptPropertiesCodeGenerator.cs" />
     <Compile Include="Computations\FilterUseExecutionContextCodeGenerator.cs" />
     <Compile Include="Computations\ReportDataCodeGenerator.cs" />
     <Compile Include="DataStructure\ComputedCodeGenerator.cs" />
     <Compile Include="DataStructure\ClaimRepositoryCodeGenerator.cs" />
-    <Compile Include="DomUtility.cs" />
+    <Compile Include="DataStructureUtility.cs" />
     <Compile Include="Computations\ComposableFilterByCodeGenerator.cs" />
     <Compile Include="Computations\ComputationUseExecutionContextCodeGenerator.cs" />
     <Compile Include="Computations\DenySaveCodeGenerator.cs" />
@@ -85,6 +99,25 @@
     <Compile Include="Computations\KeepSynchronizedOnChangedItemsCodeGenerator.cs" />
     <Compile Include="Computations\ComputeForNewBaseItemsCodeGenerator.cs" />
     <Compile Include="Computations\QueryableExtensionCodeGenerator.cs" />
+    <Compile Include="FilterExpression.cs" />
+    <Compile Include="GenericRepository.cs" />
+    <Compile Include="GenericRepositories.cs" />
+    <Compile Include="PropertySelectorExpression.cs" />
+    <Compile Include="HierarchyItem.cs" />
+    <Compile Include="KeepSynchronizedRecomputeOnDeploy.cs" />
+    <Compile Include="ReflectionHelper.cs" />
+    <Compile Include="ReplaceWithReference.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyReadCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleDenyWriteCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowWriteCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsRuleAllowReadCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritReadFromCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsInheritWriteFromCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsReadCodeGenerator.cs" />
+    <Compile Include="RowPermissions\RowPermissionsUtility.cs" />
+    <Compile Include="RowPermissions\RowPermissionsWriteCodeGenerator.cs" />
     <Compile Include="SimpleBusinessLogic\ActionCodeGenerator.cs" />
     <Compile Include="SimpleBusinessLogic\ReloadBeforeValidationsCodeGenerator.cs" />
     <Compile Include="SimpleBusinessLogic\DenyUserEditDataStructureCodeGenerator.cs" />
@@ -116,9 +149,8 @@
     <Compile Include="DataStructure\RepositoryHelper.cs" />
     <Compile Include="DataStructure\SqlQueryableCodeGenerator.cs" />
     <Compile Include="DataStructure\BrowseDataStructureCodeGenerator.cs" />
-    <Compile Include="GenericFilterWithPagingUtility.cs" />
+    <Compile Include="GenericFilterHelper.cs" />
     <Compile Include="HierarchyInfo.cs" />
-    <Compile Include="HierarchyItem.cs" />
     <Compile Include="SimpleBusinessLogic\ModuleExternalReferenceCodeGenerator.cs" />
     <Compile Include="DataStructure\BrowsePropertyCodeGenerator.cs" />
     <Compile Include="SimpleBusinessLogic\RequiredPropertyCodeGenerator.cs" />
@@ -134,6 +166,10 @@
     <ProjectReference Include="..\..\..\Source\Rhetos.Logging.Interfaces\Rhetos.Logging.Interfaces.csproj">
       <Project>{bb7e5668-1b43-4fce-a832-444cc57fee80}</Project>
       <Name>Rhetos.Logging.Interfaces</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\..\Source\Rhetos.Persistence.NHibernate\Rhetos.Persistence.NHibernate.csproj">
+      <Project>{24238da8-70c5-4be5-85b3-359e60b40acf}</Project>
+      <Name>Rhetos.Persistence.NHibernate</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\..\Source\Rhetos.Security\Rhetos.Security.csproj">
       <Project>{f3480d1e-1c20-448d-b2f6-133472ceeb93}</Project>
@@ -184,11 +220,21 @@
       <Name>Rhetos.Processing.DefaultCommands.Interfaces</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>
     </PostBuildEvent>
   </PropertyGroup>
+  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SolutionDir)\.nuget\NuGet.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\.nuget\NuGet.targets'))" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

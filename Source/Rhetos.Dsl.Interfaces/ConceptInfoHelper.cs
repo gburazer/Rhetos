@@ -20,12 +20,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Rhetos.Dsl
 {
     public static class ConceptInfoHelper
     {
+        private static ConditionalWeakTable<IConceptInfo, string> KeyCache = new ConditionalWeakTable<IConceptInfo, string>();
+
         /// <summary>
         /// Returns a string that <b>uniquely describes the concept instance</b>.
         /// The string contains concept's base class type and a list of concept's key properties.
@@ -41,10 +44,15 @@ namespace Rhetos.Dsl
             if (ci == null)
                 throw new ArgumentNullException();
 
+            return KeyCache.GetValue(ci, CreateKey);
+        }
+
+        private static string CreateKey(IConceptInfo ci)
+        {
             StringBuilder desc = new StringBuilder(100);
             desc.Append(BaseConceptInfoType(ci).Name);
             desc.Append(" ");
-            AppendMembers(desc, ci, SerializationOptions.KeyMembers);
+            AppendMembers(desc, ci, SerializationOptions.KeyMembers, exceptionOnNullMember: true);
             return desc.ToString();
         }
 
@@ -79,7 +87,7 @@ namespace Rhetos.Dsl
         public static string GetKeyProperties(this IConceptInfo ci)
         {
             StringBuilder desc = new StringBuilder(100);
-            AppendMembers(desc, ci, SerializationOptions.KeyMembers);
+            AppendMembers(desc, ci, SerializationOptions.KeyMembers, exceptionOnNullMember: true);
             return desc.ToString();
         }
 
@@ -163,7 +171,7 @@ namespace Rhetos.Dsl
                     if (memberValue == null)
                         report.Append("<null>");
                     else if (member.IsConceptInfo)
-                        report.Append(((IConceptInfo)memberValue).GetKeyProperties());
+                        AppendMembers(report, (IConceptInfo)memberValue, SerializationOptions.KeyMembers, exceptionOnNullMember: false);
                     else
                         report.Append(memberValue.ToString());
                 }
@@ -196,7 +204,7 @@ namespace Rhetos.Dsl
             AllMembers
         };
 
-        private static void AppendMembers(StringBuilder text, IConceptInfo ci, SerializationOptions serializationOptions)
+        private static void AppendMembers(StringBuilder text, IConceptInfo ci, SerializationOptions serializationOptions, bool exceptionOnNullMember = false)
         {
             IEnumerable<ConceptMember> members = ConceptMembers.Get(ci);
             if (serializationOptions == SerializationOptions.KeyMembers)
@@ -210,21 +218,26 @@ namespace Rhetos.Dsl
                     text.Append(separator);
                 firstMember = false;
 
-                AppendMember(text, ci, member);
+                AppendMember(text, ci, member, exceptionOnNullMember);
             }
         }
 
-        private static void AppendMember(StringBuilder text, IConceptInfo ci, ConceptMember member)
+        private static void AppendMember(StringBuilder text, IConceptInfo ci, ConceptMember member, bool exceptionOnNullMember)
         {
             object memberValue = member.GetValue(ci);
             if (memberValue == null)
-                text.Append("<null>");
+                if (exceptionOnNullMember)
+                    throw new DslSyntaxException(ci, string.Format(
+                        "{0}'s property {1} is null. Info: {2}.",
+                        ci.GetType().Name, member.Name, ci.GetErrorDescription()));
+                else
+                    text.Append("<null>");
             else if (member.IsConceptInfo)
             {
-                IConceptInfo value = (IConceptInfo) member.GetValue(ci);
+                IConceptInfo value = (IConceptInfo)member.GetValue(ci);
                 if (member.ValueType == typeof(IConceptInfo))
                     text.Append(BaseConceptInfoType(value).Name).Append(":");
-                AppendMembers(text, value, SerializationOptions.KeyMembers);
+                AppendMembers(text, value, SerializationOptions.KeyMembers, exceptionOnNullMember);
             }
             else if (member.ValueType == typeof(string))
                 text.Append(SafeDelimit(member.GetValue(ci).ToString()));

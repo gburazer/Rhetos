@@ -17,19 +17,17 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Rhetos.Utilities;
-using Rhetos.Persistence;
-using System.Diagnostics;
-using System.Globalization;
 using Rhetos.Extensibility;
 using Rhetos.Logging;
-using System.Data.SqlClient;
-using Autofac.Features.OwnedInstances;
+using Rhetos.Persistence;
 using Rhetos.Security;
+using Rhetos.Utilities;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
 
 namespace Rhetos.Processing
 {
@@ -38,28 +36,40 @@ namespace Rhetos.Processing
         private readonly IPluginsContainer<ICommandImplementation> _commandRepository;
         private readonly IPluginsContainer<ICommandObserver> _commandObservers;
         private readonly ILogger _logger;
+        private readonly ILogger _requestLogger;
         private readonly ILogger _performanceLogger;
         private readonly IPersistenceTransaction _persistenceTransaction;
         private readonly IAuthorizationManager _authorizationManager;
+        private readonly XmlUtility _xmlUtility;
+        private readonly IUserInfo _userInfo;
+
+        private static string _clientExceptionUserMessage = "Operation could not be completed because the request sent to the server was not valid or not properly formatted.";
 
         public ProcessingEngine(
             IPluginsContainer<ICommandImplementation> commandRepository,
             IPluginsContainer<ICommandObserver> commandObservers,
             ILogProvider logProvider,
             IPersistenceTransaction persistenceTransaction,
-            IAuthorizationManager authorizationManager)
+            IAuthorizationManager authorizationManager,
+            XmlUtility xmlUtility,
+            IUserInfo userInfo)
         {
             _commandRepository = commandRepository;
             _commandObservers = commandObservers;
             _logger = logProvider.GetLogger("ProcessingEngine");
+            _requestLogger = logProvider.GetLogger("ProcessingEngine Request");
             _performanceLogger = logProvider.GetLogger("Performance");
             _persistenceTransaction = persistenceTransaction;
             _authorizationManager = authorizationManager;
+            _xmlUtility = xmlUtility;
+            _userInfo = userInfo;
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public ProcessingResult Execute(IList<ICommandInfo> commands)
         {
+            _requestLogger.Trace(() => string.Format("User: {0}, Commands({1}): {2}.", _userInfo.UserName, commands.Count, string.Join(", ", commands.Select(a => a.GetType().Name))));
+
             var authorizationMessage = _authorizationManager.Authorize(commands);
             _persistenceTransaction.NHibernateSession.Clear(); // NHibernate cached data from AuthorizationManager may cause problems later with serializing arrays that mix cached proxies with POCO instance.
 
@@ -72,14 +82,11 @@ namespace Rhetos.Processing
                 };
 
             var commandResults = new List<CommandResult>();
-            int commandCount = 0;
 
             try
             {
                 foreach (var commandInfo in commands)
                 {
-                    commandCount++;
-
                     _logger.Trace("Executing command {0}: {1}.", commandInfo.GetType().Name, commandInfo);
 
                     var implementations = _commandRepository.GetImplementations(commandInfo.GetType());
@@ -106,7 +113,7 @@ namespace Rhetos.Processing
 
                     var commandResult = commandImplementation.Execute(commandInfo);
 
-                    _performanceLogger.Write(stopwatch, "ProcessingEngine: Command executed.");
+                    _performanceLogger.Write(stopwatch, () => "ProcessingEngine: Command executed (" + commandInfo.GetType().FullName + ").");
                     _logger.Trace("Execution result message: {0}", commandResult.Message);
 
                     if (commandResult.Success)
@@ -123,7 +130,7 @@ namespace Rhetos.Processing
                         _persistenceTransaction.DiscardChanges();
 
                         var systemMessage = String.Format(CultureInfo.InvariantCulture, "Command failed. {0} {1} {2}", commandInfo.GetType().Name, commandInfo, commandImplementation.GetType().Name);
-                        return LogResultsReturnError(commandResults, systemMessage + " " + commandResult.Message, commandCount, systemMessage, commandResult.Message);
+                        return LogResultsReturnError(commandResults, systemMessage + " " + commandResult.Message, systemMessage, commandResult.Message);
                     }
                 }
 
@@ -138,77 +145,55 @@ namespace Rhetos.Processing
             {
                 _persistenceTransaction.DiscardChanges();
 
-                if (commandCount == 0)
+                if (ex is TargetInvocationException && ex.InnerException is RhetosException)
                 {
-                    _logger.Error("Processing engine exception. {0}", ex);
-                    return new ProcessingResult
-                    {
-                        SystemMessage = "Server exception." + Environment.NewLine + ex,
-                        Success = false
-                    };
+                    _logger.Trace(() => "Unwrapping exception: " + ex.ToString());
+                    ex = ex.InnerException;
                 }
 
                 string userMessage = null;
                 string systemMessage = null;
-                if (ex is UserException) {
+
+                var sqlException = SqlUtility.InterpretSqlException(ex);
+                if (sqlException != null) ex = sqlException;
+
+                if (ex is UserException) 
+                {
                     userMessage = ex.Message;
                     systemMessage = (ex as UserException).SystemMessage;
                 }
-                if (userMessage == null)
-                    userMessage = TryParseSqlException(ex);
-
-                if (userMessage == null && systemMessage == null)
-                    systemMessage = ex.GetType().Name + ". For details see RhetosServer.log.";
+                else if (ex is ClientException)
+                {
+                    userMessage = _clientExceptionUserMessage;
+                    systemMessage = ex.Message;
+                }
+                else
+                {
+                    userMessage = null;
+                    systemMessage = "Internal server error occurred (" + ex.GetType().Name + "). See RhetosServer.log for more information.";
+                }
 
                 return LogResultsReturnError(
                     commandResults,
-                    "Command execution error: " + ex,
-                    commandCount,
+                    "Command execution error: ",
                     systemMessage,
-                    userMessage);
+                    userMessage,
+                    ex);
             }
         }
 
-        private static string TryParseSqlException(Exception exception)
+        private ProcessingResult LogResultsReturnError(List<CommandResult> commandResults, string logError, string systemMessage, string userMessage, Exception logException = null)
         {
-            var sqlException = ExtractSqlException(exception);
-            if (sqlException == null)
-                return null;
 
-            if (sqlException.State == 101) // Our convention for an error raised in SQL that is intended as a message to the end user.
-                return sqlException.Message;
+            var errorSeverity = logException == null ? EventType.Error
+                : logException is UserException ? EventType.Trace
+                : logException is ClientException ? EventType.Info
+                : EventType.Error;
+                 
+            _logger.Write(errorSeverity, () => logError + logException);
 
-            if (sqlException.Message.StartsWith("Cannot insert duplicate key"))
-                return "It is not allowed to enter a duplicate record."; // TODO: Internationalization.
+            _logger.Trace(() => _xmlUtility.SerializeArrayToXml(commandResults.ToArray()));
 
-            if (sqlException.Message.StartsWith("The DELETE statement conflicted with the REFERENCE constraint"))
-                return "It is not allowed to delete a record that is referenced by other records."; // TODO: Internationalization.
-
-            if (sqlException.Message.StartsWith("The DELETE statement conflicted with the SAME TABLE REFERENCE constraint"))
-                return "It is not allowed to delete a record that is referenced by other records."; // TODO: Internationalization.
-
-            if (sqlException.Message.StartsWith("The INSERT statement conflicted with the FOREIGN KEY constraint"))
-                return "It is not allowed to enter the record. An entered value references nonexistent record."; // TODO: Internationalization.
-
-            if (sqlException.Message.StartsWith("The UPDATE statement conflicted with the FOREIGN KEY constraint"))
-                return "It is not allowed to edit the record. An entered value references nonexistent record."; // TODO: Internationalization.
-
-            return null;
-        }
-
-        private static SqlException ExtractSqlException(Exception exception)
-        {
-            if (exception is SqlException)
-                return (SqlException)exception;
-            if (exception.InnerException != null)
-                return ExtractSqlException(exception.InnerException);
-            return null;
-        }
-
-        private ProcessingResult LogResultsReturnError(List<CommandResult> commandResults, string logError, int commandCount, string systemMessage, string userMessage)
-        {
-            _logger.Error(logError);
-            _logger.Trace(XmlUtility.SerializeArrayToXml(commandResults.ToArray()));
             return new ProcessingResult
                 {
                     Success = false,

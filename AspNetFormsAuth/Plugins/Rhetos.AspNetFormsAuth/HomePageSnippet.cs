@@ -17,9 +17,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using Rhetos.Utilities;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -28,23 +30,18 @@ namespace Rhetos.AspNetFormsAuth
     [Export(typeof(IHomePageSnippet))]
     public class HomePageSnippet : IHomePageSnippet
     {
+        private string _snippet;
+
         public string Html
         {
             get
             {
-                return
-@"        <h2>AspNetFormsAuth</h2>
-        <p>
-            User authentication:
-            <a href=""Resources/AspNetFormsAuth/Login.html"">Log in</a>
-            <a href=""Resources/AspNetFormsAuth/Logout.html"">Log out</a>
-            <a href=""Resources/AspNetFormsAuth/ChangeMyPassword.html"">Change my password</a>
-        <br/>
-            Administration:
-            <a href=""Resources/AspNetFormsAuth/SetPassword.html"">Set password</a>
-            <a href=""Resources/AspNetFormsAuth/UnlockUser.html"">Unlock user</a>
-        </p>
-";
+                if (_snippet == null)
+                {
+                    string filePath = Path.Combine(Paths.ResourcesFolder, "AspNetFormsAuth", "HomePageSnippet.html");
+                    _snippet = File.ReadAllText(filePath, Encoding.Default);
+                }
+                return _snippet;
             }
         }
     }

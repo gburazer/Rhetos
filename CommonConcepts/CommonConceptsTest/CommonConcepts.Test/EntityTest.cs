@@ -17,12 +17,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Rhetos.Configuration.Autofac;
+using Rhetos.TestCommon;
+using Rhetos.Utilities;
 using System;
-using System.Text;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Rhetos.TestCommon;
+using System.Text;
 
 namespace CommonConcepts.Test
 {
@@ -32,17 +35,16 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void QuerySimple()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                     {
                         "DELETE FROM TestEntity.Claim",
                         "INSERT INTO TestEntity.Claim (ClaimResource, ClaimRight) SELECT 'res1', 'rig1'",
                         "INSERT INTO TestEntity.Claim (ClaimResource, ClaimRight) SELECT 'res2', 'rig2'"
                     });
-                var repository = new Common.DomRepository(executionContext);
 
-
+                var repository = container.Resolve<Common.DomRepository>();
                 var loaded = repository.TestEntity.Claim.Query();
                 Assert.AreEqual("res1.rig1, res2.rig2", TestUtility.DumpSorted(loaded, c => c.ClaimResource + "." + c.ClaimRight));
             }
@@ -51,11 +53,11 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void QueryComplex()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                     {
                         "DELETE FROM TestEntity.Permission",
                         "DELETE FROM TestEntity.Principal",
@@ -80,11 +82,11 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void ReferencedEntity()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                     {
                         "DELETE FROM TestEntity.Permission",
                         "DELETE FROM TestEntity.Principal",
@@ -102,7 +104,7 @@ namespace CommonConcepts.Test
 
                 var permission2 = repository.TestEntity.Permission.Query().Where(perm => perm.IsAuthorized == false).Single();
                 Assert.AreEqual(false, permission2.IsAuthorized);
-                executionContext.NHibernateSession.Clear();
+                container.Resolve<Common.ExecutionContext>().NHibernateSession.Clear();
                 Assert.AreEqual("p1", permission2.Principal.Name, "after NHibernateSession.Clear");
             }
         }
@@ -118,12 +120,12 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void InsertUpdateDelete_TransientInstances()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
                 var claims = repository.TestEntity.Claim;
 
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestEntity.Claim" });
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.Claim" });
                 Assert.AreEqual("", ReportClaims(repository), "initial");
 
                 var newClaims = new[]
@@ -145,12 +147,12 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void UpdateDelete_PersistendInstances()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
                 var claims = repository.TestEntity.Claim;
 
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestEntity.Claim" });
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.Claim" });
                 Assert.AreEqual("", ReportClaims(repository), "initial");
 
                 var newClaims = new[]
@@ -177,11 +179,11 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void UpdateableExtendedTable()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                 {
                     "DELETE FROM TestEntity.Extension",
                     "DELETE FROM TestEntity.BaseEntity",
@@ -208,7 +210,7 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void Spike_NHibernateLoadMergeSavePersist()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
                 var pe1id = Guid.NewGuid();
                 var pe2id = Guid.NewGuid();
@@ -217,7 +219,7 @@ namespace CommonConcepts.Test
                 var cl1id = Guid.NewGuid();
                 var cl2id = Guid.NewGuid();
 
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                     {
                         "DELETE FROM TestEntity.Permission",
                         "DELETE FROM TestEntity.Principal",
@@ -230,11 +232,11 @@ namespace CommonConcepts.Test
                         "INSERT INTO TestEntity.Permission (ID, PrincipalID, ClaimID, IsAuthorized) SELECT '"+pe2id+"', '"+pr1id+"', '"+cl2id+"', 1"
                     });
 
-                var nhs = executionContext.NHibernateSession;
-				
-				// NH terminology: "Transient object" - a simple instance that is not bound to other references instances.
-				// NH terminology: "Persistent object" - an instance that is bound to its coresponding database record and other referenced instances in NH cache. Allows lazy evaluation of references and navigation by references.
-				
+                var nhs = container.Resolve<Common.ExecutionContext>().NHibernateSession;
+                
+                // NH terminology: "Transient object" - a simple instance that is not bound to other references instances.
+                // NH terminology: "Persistent object" - an instance that is bound to its coresponding database record and other referenced instances in NH cache. Allows lazy evaluation of references and navigation by references.
+                
 
                 // ============= UPDATE:
 
@@ -271,7 +273,7 @@ namespace CommonConcepts.Test
 
                     // Save/Persist will instantly fail if that ID already exists in the NH session. Otherwise, Flush will fail if the record exists in the database.
                     nhs.Flush(); // If a reference does not exist in db nor memory, Save/Persist+Flush will first insert a record with NULL reference,
-					// expecting the referenced record to be inserted in the same session, and then update the reference. It will fail at that point if the reference is invalid.
+                    // expecting the referenced record to be inserted in the same session, and then update the reference. It will fail at that point if the reference is invalid.
 
                     var loadedPe3 = nhs.Load<TestEntity.Permission>(pe3id);
                     // Save/Persist does not generate a new proxy object!! It will keep in the 1st level cache the given instance (even if it's references are not bound), up until Clear/Refresh.
@@ -293,7 +295,7 @@ namespace CommonConcepts.Test
                     var pe4 = new TestEntity.Permission { ID = pe4id, Principal = pr1, Claim = cl1, IsAuthorized = true };
 
                     // MANUALLY CREATING PROXY OBJECT BY EXPLICITLY CALLING Load FOR ALL NAVIGATION PROPERTIES, THEN USING Persist FUNCTION
-					// IS FASTER THAN Merge, BECAUSE HN WILL NOT ONCE LOAD THE DATA FROM THE DATABASE.
+                    // IS FASTER THAN Merge, BECAUSE HN WILL NOT ONCE LOAD THE DATA FROM THE DATABASE.
                     // ON THE OTHER HAND, USING Merge FUNCTION IS MUSH EASIER BECAUSE IT AUTOMATICALLY CREATES THE PROXY OBJECT.
 
                     nhs.Persist(pe4);
@@ -324,9 +326,9 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void CascadeDelete()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var pid1 = Guid.NewGuid();
                 var pid2 = Guid.NewGuid();
@@ -336,7 +338,7 @@ namespace CommonConcepts.Test
                 var cid21 = Guid.NewGuid();
                 var cid31 = Guid.NewGuid();
 
-                executionContext.SqlExecuter.ExecuteSql(new[]
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[]
                 {
                     "DELETE FROM TestEntity.Child",
                     "DELETE FROM TestEntity.BaseEntity",
@@ -360,10 +362,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void ShortStringPropertyBasicRhetosTypeValidation()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestEntity.Principal" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.Principal" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 TestEntity.Principal item = new TestEntity.Principal();
                 item.Name = new string('x', 256);
@@ -382,10 +384,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void LargeText()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestEntity.Large" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.Large" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var item = new TestEntity.Large { Text = new string('x', 1024 * 1024) };
                 repository.TestEntity.Large.Insert(new[] { item });
@@ -414,10 +416,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void DateTimeTest()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 for (int i = 0; i < 7; i++)
                 {
@@ -437,10 +439,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void DecimalSizeTest()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s = new TestTypes.Simple { Length = 1234567890123456789012345678m };
                 Assert.AreEqual("1234567890123456789012345678", s.Length.Value.ToString());
@@ -455,10 +457,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void DecimalPrecisionTest()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestTypes.Simple" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s = new TestTypes.Simple { Length = 0.0123456789m };
                 Assert.AreEqual("0.0123456789", s.Length.Value.ToString("F10", System.Globalization.CultureInfo.InvariantCulture));
@@ -466,6 +468,85 @@ namespace CommonConcepts.Test
 
                 var loaded = repository.TestTypes.Reader.All().Single();
                 Assert.AreEqual(s.Length, loaded.Length);
+            }
+        }
+
+        [TestMethod]
+        public void SaveNonmaterialized()
+        {
+            using (var container = new RhetosTestContainer())
+            {
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.UniqueEntity" });
+                var r = container.Resolve<Common.DomRepository>().TestEntity.UniqueEntity;
+
+                var query = new[] { "a", "b", "c" }.Select(name => new TestEntity.UniqueEntity { Name = name });
+                Assert.IsFalse(query is ICollection);
+                Assert.IsFalse(query is IList);
+
+                r.Insert(query);
+                Assert.AreEqual("a, b, c", TestUtility.DumpSorted(r.All(), item => item.Name));
+            }
+        }
+
+        [TestMethod]
+        public void SaveDuplicate()
+        {
+            using (var container = new RhetosTestContainer())
+            {
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.Principal" });
+                var r = container.Resolve<Common.DomRepository>().TestEntity.Principal;
+
+                var i1 = new TestEntity.Principal { Name = "a", ID = Guid.NewGuid() };
+                var i2 = new TestEntity.Principal { Name = "b", ID = i1.ID };
+
+                r.Insert(new[] { i1 });
+                TestUtility.ShouldFail(() => r.Insert(new[] { i2 }), "Inserting a record that already exists");
+            }
+        }
+
+        [TestMethod]
+        public void DeleteUpdateInsert_ConflictUnique()
+        {
+            using (var container = new RhetosTestContainer())
+            {
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestEntity.UniqueEntity" });
+                var r = container.Resolve<Common.DomRepository>().TestEntity.UniqueEntity;
+                var nhSession = container.Resolve<Common.ExecutionContext>().NHibernateSession;
+
+                var ia = new TestEntity.UniqueEntity { Name = "a", ID = Guid.NewGuid() };
+                var ib = new TestEntity.UniqueEntity { Name = "b", ID = Guid.NewGuid() };
+                var ic1 = new TestEntity.UniqueEntity { Name = "c", ID = Guid.NewGuid() };
+
+                r.Insert(new[] { ia, ib, ic1 });
+                Assert.AreEqual("a, b, c", TestUtility.DumpSorted(r.All(), item => item.Name + item.Data));
+
+                // Deleting old 'c' and inserting new 'c'. Possible conflict on unique constraint for property Name.
+
+                var ic2 = new TestEntity.UniqueEntity { Name = "c", ID = Guid.NewGuid() };
+
+                r.Save(new[] { ic2 }, null, new[] { ic1 });
+                nhSession.Clear();
+                Assert.AreEqual("a, b, c", TestUtility.DumpSorted(r.All(), item => item.Name + item.Data));
+                Guid currentCID = r.Query().Where(item => item.Name == "c").Select(item => item.ID).Single();
+                Assert.AreEqual(ic2.ID, currentCID, "new inserted item 'c'");
+                Assert.AreNotEqual(ic1.ID, currentCID, "old deleted item 'c'");
+
+                // Deleting old 'c' and inserting new 'c' with same ID. Possible conflict on primary key.
+
+                var ic3 = new TestEntity.UniqueEntity { Name = "c", Data = "x", ID = ic2.ID };
+
+                r.Save(new[] { ic3 }, null, new[] { ic2 });
+                nhSession.Clear();
+                Assert.AreEqual("a, b, cx", TestUtility.DumpSorted(r.All(), item => item.Name + item.Data));
+
+                // Renaming old 'c' and inserting new 'c'. Possible conflict on unique constraint for property Name.
+
+                ic3.Name = "oldc";
+                var ic4 = new TestEntity.UniqueEntity { Name = "c", ID = Guid.NewGuid() };
+
+                r.Save(new[] { ic4 }, new[] { ic3 }, null);
+                nhSession.Clear();
+                Assert.AreEqual("a, b, c, oldcx", TestUtility.DumpSorted(r.All(), item => item.Name + item.Data));
             }
         }
     }

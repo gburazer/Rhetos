@@ -100,6 +100,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -112,12 +113,18 @@
     <Compile Include="ConceptKeywordAttribute.cs" />
     <Compile Include="ConceptMember.cs" />
     <Compile Include="ConceptMembers.cs" />
+    <Compile Include="ConceptMetadata.cs" />
+    <Compile Include="DslModelIndexByReference.cs" />
     <Compile Include="DslScript.cs" />
     <Compile Include="DslSyntaxException.cs" />
     <Compile Include="IAlternativeInitializationConcept.cs" />
     <Compile Include="IConceptInfo.cs" />
     <Compile Include="IConceptParser.cs" />
-    <Compile Include="IDslContainer.cs" />
+    <Compile Include="IConceptMacro.cs" />
+    <Compile Include="DslModelIndexByType.cs" />
+    <Compile Include="IDslModelIndex.cs" />
+    <Compile Include="IDslScriptsLoader.cs" />
+    <Compile Include="InitializationConcept.cs" />
     <Compile Include="IValidationConcept.cs" />
     <Compile Include="IDslModel.cs" />
     <Compile Include="IDslSource.cs" />
@@ -132,6 +139,10 @@
     </CodeAnalysisDictionary>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Rhetos.Extensibility.Interfaces\Rhetos.Extensibility.Interfaces.csproj">
+      <Project>{ddc73f5f-bb0e-4944-92cc-4ac937398499}</Project>
+      <Name>Rhetos.Extensibility.Interfaces</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Rhetos.Utilities\Rhetos.Utilities.csproj">
       <Project>{71E63722-57BC-41DF-9FF5-57ECC67E4BC1}</Project>
       <Name>Rhetos.Utilities</Name>

@@ -17,177 +17,134 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Configuration;
-using System.IO;
-using System.Reflection;
-using System.Text;
-using System.Threading;
-using System.Xml;
-using System.Linq;
 using Autofac;
-using Rhetos;
-using Rhetos.Utilities;
-using Rhetos.DatabaseGenerator;
 using Rhetos.Deployment;
 using Rhetos.Dom;
-using Rhetos.Logging;
-using Rhetos.Persistence.NHibernate;
-using Rhetos.Security;
-using Rhetos.Dsl;
-using System.Collections.Generic;
 using Rhetos.Extensibility;
+using Rhetos.Logging;
+using Rhetos.Utilities;
+using System;
 using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
 
 namespace DeployPackages
 {
-    class Program
+    public class Program
     {
-        static ILogger _logger = new ConsoleLogger("DeployPackagesInitialization");
-        static ILogger _performanceLogger;
-
-        static int Main(string[] args)
+        public static int Main(string[] args)
         {
-            Action undoDataMigrationScriptsOnError = null;
+            ILogger logger = new ConsoleLogger("DeployPackages"); // Using the simplest logger outside of try-catch block.
+            string oldCurrentDirectory = null;
 
             try
             {
-                string generatedDllsFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Generated");
-                if (!Directory.Exists(generatedDllsFolder))
-                    Directory.CreateDirectory(generatedDllsFolder);
-                foreach (var oldGeneratedFile in Directory.GetFiles(generatedDllsFolder, "*", SearchOption.AllDirectories))
-                    File.Delete(oldGeneratedFile);
+                logger = DeploymentUtility.InitializationLogProvider.GetLogger("DeployPackages"); // Setting the final log provider inside the try-catch block, so that the simple ConsoleLogger can be used (see above) in case of an initialization error.
 
-                var builder = new ContainerBuilder();
-                string connectionString = SqlUtility.ConnectionString;
-                builder.RegisterModule(new AutofacConfiguration(connectionString));
-                using (var container = builder.Build())
+                var arguments = new Arguments(args);
+                if (arguments.Help)
+                    return 1;
+
+                if (arguments.StartPaused)
                 {
-                    _logger = new ConsoleLogger("DeployPackages", container.Resolve<ILogProvider>().GetLogger("DeployPackages"));
-                    _performanceLogger = container.Resolve<ILogProvider>().GetLogger("Performance");
+                    if (!Environment.UserInteractive)
+                        throw new Rhetos.UserException("DeployPackages parameter 'StartPaused' must not be set, because the application is executed in a non-interactive environment.");
 
-                    Console.WriteLine("SQL connection string: " + SqlUtility.MaskPassword(connectionString));
+                    // Use for debugging (Attach to Process)
+                    Console.WriteLine("Press any key to continue . . .");
+                    Console.ReadKey(true);
+                }
 
-                    Console.Write("Parsing DSL scripts ... ");
-                    Console.WriteLine(container.Resolve<IDslModel>().Concepts.Count() + " statements.");
+                Paths.InitializeRhetosServerRootPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".."));
 
-                    Console.Write("Compiling DOM assembly ... ");
-                    int generatedTypesCount = container.Resolve<IDomGenerator>().ObjectModel.GetTypes().Length;
-                    if (generatedTypesCount == 0)
+                oldCurrentDirectory = Directory.GetCurrentDirectory();
+                Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
+
+                DeleteOldGeneratedFiles(); // The old plugins must be deleted before loading the application generator plugins.
+
+                {
+                    logger.Trace("Loading plugins.");
+                    var stopwatch = Stopwatch.StartNew();
+
+                    var builder = new ContainerBuilder();
+                    builder.RegisterModule(new AutofacModuleConfiguration(deploymentTime: true));
+                    using (var container = builder.Build())
                     {
-                        string report = "WARNING: Empty assembly is generated.";
-                        DeploymentUtility.WriteError(report);
-                        _logger.Error(report);
-                    }
-                    else
-                        Console.WriteLine("Generated " + generatedTypesCount + " types.");
+                        var performanceLogger = container.Resolve<ILogProvider>().GetLogger("Performance");
+                        performanceLogger.Write(stopwatch, "DeployPackages.Program: Modules and plugins registered.");
+                        Plugins.LogRegistrationStatistics("Generating application", container);
 
-                    var generators = container.Resolve<GeneratorPlugins>().GetGenerators();
-                    foreach (var generator in generators)
+                        if (arguments.Debug)
+                            container.Resolve<DomGeneratorOptions>().Debug = true;
+
+                        container.Resolve<ApplicationGenerator>().ExecuteGenerators();
+                    }
+                }
+
+                // Creating a new container builder instead of using builder.Update, because of severe performance issues with the Update method.
+                Plugins.ClearCache();
+
+                {
+                    logger.Trace("Loading generated plugins.");
+                    var stopwatch = Stopwatch.StartNew();
+
+                    var builder = new ContainerBuilder();
+                    builder.RegisterModule(new AutofacModuleConfiguration(deploymentTime: false));
+                    using (var container = builder.Build())
                     {
-                        Console.Write("Executing " + generator.GetType().Name + " ... ");
-                        generator.Generate();
-                        Console.WriteLine("Done.");
+                        var performanceLogger = container.Resolve<ILogProvider>().GetLogger("Performance");
+                        performanceLogger.Write(stopwatch, "DeployPackages.Program: New modules and plugins registered.");
+                        Plugins.LogRegistrationStatistics("Initializing application", container);
+
+                        container.Resolve<ApplicationInitialization>().ExecuteInitializers();
                     }
-                    if (!generators.Any())
-                        Console.WriteLine("No additional generators.");
-
-                    Console.Write("Preparing Rhetos database ... ");
-                    DeploymentUtility.PrepareRhetosDatabase(container.Resolve<ISqlExecuter>());
-                    Console.WriteLine("Done.");
-
-                    Console.Write("Cleaning old migration data ... ");
-                    var databaseCleaner = container.Resolve<DatabaseCleaner>();
-                    {
-                        string report = databaseCleaner.RemoveRedundantMigrationColumns();
-                        databaseCleaner.RefreshDataMigrationRows();
-                        Console.WriteLine(report);
-                    }
-
-                    Console.Write("Executing data migration scripts ... ");
-                    var dataMigration = container.Resolve<DataMigration>();
-                    var dataMigrationReport = dataMigration.ExecuteDataMigrationScripts(AutofacConfiguration.DataMigrationScriptsFolder);
-                    Console.WriteLine(dataMigrationReport);
-                    undoDataMigrationScriptsOnError = delegate { dataMigration.UndoDataMigrationScripts(dataMigrationReport.CreatedTags); };
-
-                    Console.Write("Upgrading database ... ");
-                    var updateDatabaseReport = container.Resolve<IDatabaseGenerator>().UpdateDatabaseStructure();
-                    Console.WriteLine(updateDatabaseReport);
-                    undoDataMigrationScriptsOnError = null;
-
-                    Console.Write("Deleting redundant migration data ... ");
-                    {
-                        var report = databaseCleaner.RemoveRedundantMigrationColumns();
-                        databaseCleaner.RefreshDataMigrationRows();
-                        Console.WriteLine(report);
-                    }
-
-                    Console.Write("Uploading DSL scripts ... ");
-                    int dslScriptCount = DslScriptManager.UploadDslScriptsToServer(AutofacConfiguration.DslScriptsFolder, container.Resolve<ISqlExecuter>());
-                    if (dslScriptCount == 0)
-                    {
-                        string report = "WARNING: There are no DSL scripts in source folder " + AutofacConfiguration.DslScriptsFolder + ".";
-                        _logger.Info(report);
-                    }
-                    else
-                        Console.WriteLine("Uploaded " + dslScriptCount + " DSL scripts to database.");
-
-                    Console.Write("Generating NHibernate mapping ... ");
-                    File.WriteAllText(AutofacConfiguration.NHibernateMappingFile, container.Resolve<INHibernateMapping>().GetMapping(), Encoding.Unicode);
-                    Console.WriteLine("Done.");
-
-                    {
-                        Console.Write("Loading generated plugins ... ");
-                        var stopwatch = Stopwatch.StartNew();
-                        PluginsUtility.DeployPackagesAdditionalAssemblies.AddRange(new[] { @"bin\ServerDom.dll", @"ServerDom.dll" }); // TODO: Remove this hack after ServerDom.dll is moved to the bin\Generated.
-                        _performanceLogger.Write(stopwatch, "DeployPackages.ServerInitialization: Additional assemblies added.");
-                        PluginsUtility.DetectAndRegisterNewModulesAndPlugins(container);
-                        _performanceLogger.Write(stopwatch, "DeployPackages.ServerInitialization: New modules and plugins registered.");
-                        Console.WriteLine("Done.");
-
-                        var initializers = container.Resolve<ServerInitializationPlugins>().GetInitializers();
-                        foreach (var initializer in initializers)
-                        {
-                            Console.Write("Initialization: " + initializer.GetType().Name + " ... ");
-                            initializer.Initialize();
-                            Console.WriteLine("Done.");
-                        }
-                        if (!initializers.Any())
-                            Console.WriteLine("No server initialization plugins.");
-                    }
-
-                    var configFile = new FileInfo(AutofacConfiguration.RhetosServerWebConfigPath);
-                    if (configFile.Exists)
-                    {
-                        DeploymentUtility.Touch(configFile);
-                        Console.WriteLine("Updated Web.config modification date to restart server.");
-                    }
-                    else
-                        Console.WriteLine("Web.config update skipped.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine();
-                _logger.Error(ex.ToString());
-
-                DeploymentUtility.WriteError(ex.GetType().Name + ": " + ex.Message);
-                Console.WriteLine("See DeployPackages.log for more information on error. Enable TraceLog in config file for even more details.");
+                logger.Error(ex.ToString());
 
                 if (ex is ReflectionTypeLoadException)
                 {
-                    var loaderMessages = string.Join("\r\n", ((ReflectionTypeLoadException)ex).LoaderExceptions.Select(le => le.Message).Distinct());
-                    _logger.Error(loaderMessages);
+                    string loaderMessages = string.Join("\r\n", ((ReflectionTypeLoadException)ex).LoaderExceptions.Select(le => le.Message).Distinct());
+                    logger.Error(loaderMessages);
                 }
 
-                if (undoDataMigrationScriptsOnError != null)
-                    undoDataMigrationScriptsOnError();
+                if (Environment.UserInteractive)
+                {
+                    PrintSummary(ex);
+                    Thread.Sleep(3000);
+                }
 
-                Thread.Sleep(3000);
                 return 1;
+            }
+            finally
+            {
+                if (oldCurrentDirectory != null && Directory.Exists(oldCurrentDirectory))
+                    Directory.SetCurrentDirectory(oldCurrentDirectory);
             }
 
             return 0;
+        }
+
+        private static void DeleteOldGeneratedFiles()
+        {
+            if (!Directory.Exists(Paths.GeneratedFolder))
+                Directory.CreateDirectory(Paths.GeneratedFolder);
+            foreach (var oldGeneratedFile in Directory.GetFiles(Paths.GeneratedFolder, "*", SearchOption.AllDirectories))
+                File.Delete(oldGeneratedFile);
+            if (File.Exists(Paths.DomAssemblyFile))
+                File.Delete(Paths.DomAssemblyFile);
+        }
+
+        private static void PrintSummary(Exception ex)
+        {
+            Console.WriteLine();
+            DeploymentUtility.WriteError(ex.GetType().Name + ": " + ex.Message);
+            Console.WriteLine();
+            Console.WriteLine("See DeployPackages.log for more information on error. Enable TraceLog in DeployPackages.exe.config for even more details.");
         }
     }
 }

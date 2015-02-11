@@ -37,6 +37,9 @@ namespace Rhetos.DatabaseGenerator
         protected readonly IPluginsContainer<IConceptDatabaseDefinition> _plugins;
         protected readonly ConceptApplicationRepository _conceptApplicationRepository;
         protected readonly ILogger _logger;
+		/// <summary>Special logger for keeping track of inserted/updated/deleted concept applications in database.</summary>
+        protected readonly ILogger _conceptsLogger;
+        protected readonly ILogger _deployPackagesLogger;
         protected readonly ILogger _performanceLogger;
 
         protected bool DatabaseUpdated = false;
@@ -55,18 +58,20 @@ namespace Rhetos.DatabaseGenerator
             _plugins = plugins;
             _conceptApplicationRepository = conceptApplicationRepository;
             _logger = logProvider.GetLogger("DatabaseGenerator");
+            _conceptsLogger = logProvider.GetLogger("DatabaseGenerator Concepts");
+            _deployPackagesLogger = logProvider.GetLogger("DeployPackages");
             _performanceLogger = logProvider.GetLogger("Performance");
         }
 
-        public string UpdateDatabaseStructure()
+        public void UpdateDatabaseStructure()
         {
             if (DatabaseUpdated) // performance optimization
-                return "Database already updated.";
+                _deployPackagesLogger.Trace("Database already updated.");
 
             lock (_databaseUpdateLock)
             {
                 if (DatabaseUpdated)
-                    return "Database already updated.";
+                    _deployPackagesLogger.Trace("Database already updated.");
 
                 _logger.Trace("Updating database structure.");
                 var stopwatchTotal = Stopwatch.StartNew();
@@ -87,7 +92,7 @@ namespace Rhetos.DatabaseGenerator
                 CalculateApplicationsToBeRemovedAndInserted(oldApplications, newApplications, out toBeRemoved, out toBeInserted, _logger);
                 _performanceLogger.Write(stopwatch, "DatabaseGenerator: Analized differences in database structure.");
 
-                var report = ApplyChangesToDatabase(oldApplications, newApplications, toBeRemoved, toBeInserted);
+                ApplyChangesToDatabase(oldApplications, newApplications, toBeRemoved, toBeInserted);
                 _performanceLogger.Write(stopwatch, "DatabaseGenerator: Applied changes to database.");
 
                 VerifyIntegrity();
@@ -95,7 +100,6 @@ namespace Rhetos.DatabaseGenerator
 
                 _performanceLogger.Write(stopwatchTotal, "DatabaseGenerator.UpdateDatabaseStructure");
                 DatabaseUpdated = true;
-                return report;
             }
         }
 
@@ -115,7 +119,7 @@ namespace Rhetos.DatabaseGenerator
                 throw new FrameworkException("A concept that does not create database objects (CreateDatabaseStructure) cannot remove them (RemoveDatabaseStructure): "
                     + emptyCreateHasRemove.GetConceptApplicationKey() + ".");
 
-            var removeLeaves = DirectedGraph.RemovableLeaves(emptyCreateQuery, GetDependencyPairs(newApplications));
+            var removeLeaves = Graph.RemovableLeaves(emptyCreateQuery, GetDependencyPairs(newApplications));
 
             foreach (var remove in removeLeaves)
             {
@@ -302,7 +306,7 @@ namespace Rhetos.DatabaseGenerator
 
         protected void ComputeCreateAndRemoveQuery(List<NewConceptApplication> newConceptApplications, IEnumerable<IConceptInfo> allConceptInfos)
         {
-            DirectedGraph.TopologicalSort(newConceptApplications, GetDependencyPairs(newConceptApplications));
+            Graph.TopologicalSort(newConceptApplications, GetDependencyPairs(newConceptApplications));
 
             var conceptInfosByKey = allConceptInfos.ToDictionary(ci => ci.GetKey());
 
@@ -360,7 +364,7 @@ namespace Rhetos.DatabaseGenerator
         {
             if (!conceptInfosByKey.ContainsKey(conceptInfoKey))
                 throw new FrameworkException(string.Format(
-                    "DatabaseGenerator error while generating code with plugin {0}: Plugin created dependency nonexisting concept info {1}.",
+                    "DatabaseGenerator error while generating code with plugin {0}: Extension created a dependency to the nonexisting concept info {1}.",
                     debugContextNewConceptApplication.ConceptImplementationType.Name,
                     conceptInfoKey));
             return conceptInfosByKey[conceptInfoKey];
@@ -369,9 +373,10 @@ namespace Rhetos.DatabaseGenerator
         /// <returns>Item2 depends on item1.</returns>
         protected static List<Tuple<NewConceptApplication, NewConceptApplication>> GetDependencyPairs(IEnumerable<NewConceptApplication> conceptApplications)
         {
-            return conceptApplications.SelectMany(
-                dependent => dependent.DependsOn.Select(dependency => Tuple.Create((NewConceptApplication)dependency, dependent))
-                ).ToList();
+            return conceptApplications
+                .SelectMany(dependent => dependent.DependsOn.Select(dependency => Tuple.Create((NewConceptApplication)dependency, dependent)))
+                .Where(dependency => dependency.Item1 != dependency.Item2)
+                .ToList();
         }
 
         /// <returns>Item2 depends on item1.</returns>
@@ -441,11 +446,11 @@ namespace Rhetos.DatabaseGenerator
             // Find dependent concepts applications to be regenerated:
             var toBeRemovedKeys = directlyRemoved.Union(changedApplications).ToList();
             var oldDependencies = GetDependencyPairs(oldApplications).Select(dep => Tuple.Create(dep.Item1.GetConceptApplicationKey(), dep.Item2.GetConceptApplicationKey()));
-            var dependentRemovedApplications = DirectedGraph.IncludeDependents(toBeRemovedKeys, oldDependencies).Except(toBeRemovedKeys);
+            var dependentRemovedApplications = Graph.IncludeDependents(toBeRemovedKeys, oldDependencies).Except(toBeRemovedKeys);
 
             var toBeInsertedKeys = directlyInserted.Union(changedApplications).ToList();
             var newDependencies = GetDependencyPairs(newApplications).Select(dep => Tuple.Create(dep.Item1.GetConceptApplicationKey(), dep.Item2.GetConceptApplicationKey()));
-            var dependentInsertedApplications = DirectedGraph.IncludeDependents(toBeInsertedKeys, newDependencies).Except(toBeInsertedKeys);
+            var dependentInsertedApplications = Graph.IncludeDependents(toBeInsertedKeys, newDependencies).Except(toBeInsertedKeys);
 
             var refreshDependents = dependentRemovedApplications.Union(dependentInsertedApplications).ToList();
             toBeRemovedKeys.AddRange(refreshDependents.Intersect(oldApplicationsByKey.Keys));
@@ -460,7 +465,7 @@ namespace Rhetos.DatabaseGenerator
             toBeInserted = toBeInsertedKeys.Select(key => newApplicationsByKey[key]).ToList();
         }
 
-        protected string ApplyChangesToDatabase(
+        protected void ApplyChangesToDatabase(
             List<ConceptApplication> oldApplications, List<NewConceptApplication> newApplications,
             List<ConceptApplication> toBeRemoved, List<NewConceptApplication> toBeInserted)
         {
@@ -481,28 +486,27 @@ namespace Rhetos.DatabaseGenerator
             _sqlExecuter.ExecuteSql(allSql.Where(sql => sql != "").ToList());
             _performanceLogger.Write(stopwatch, "DatabaseGenerator.ApplyChangesToDatabase: Executed " + allSql.Count + " SQL scripts.");
 
-            string report = "Removed " + reportRemovedCount + ", inserted " + reportInsertedCount + " concept applications.";
-            _logger.Trace(() => "Report: " + report);
-            return report;
+            var logLevel = reportRemovedCount > 0 || reportInsertedCount > 0 ? EventType.Info : EventType.Trace;
+            _deployPackagesLogger.Write(logLevel, "DatabaseGenerator removed " + reportRemovedCount + ", inserted " + reportInsertedCount + " concept applications.");
         }
 
         protected int ApplyChangesToDatabase_Remove(List<string> allSql, List<ConceptApplication> toBeRemoved, List<ConceptApplication> oldApplications)
         {
             toBeRemoved.Sort((ca1, ca2) => ca1.OldCreationOrder - ca2.OldCreationOrder); // TopologicalSort is stable sort, so it will keep this (original) order unless current dependencies direct otherwise.
-            DirectedGraph.TopologicalSort(toBeRemoved, GetDependencyPairs(oldApplications)); // Concept's dependencies might have changed, without dropping and recreating the concept. It is important to compute up-to-date remove order, otherwise FK constraint FK_AppliedConceptDependsOn_DependsOn might fail.
+            Graph.TopologicalSort(toBeRemoved, GetDependencyPairs(oldApplications)); // Concept's dependencies might have changed, without dropping and recreating the concept. It is important to compute up-to-date remove order, otherwise FK constraint FK_AppliedConceptDependsOn_DependsOn might fail.
             toBeRemoved.Reverse();
 
             int reportRemovedCount = 0;
             foreach (var ca in toBeRemoved)
             {
-                Log(ca, "Removing previously applied concept");
+                Log(ca, "Removing");
 
                 string[] removeSqlScripts = SplitSqlScript(ca.RemoveQuery);
                 allSql.AddRange(removeSqlScripts);
                 if (removeSqlScripts.Length > 0)
                     reportRemovedCount++;
 
-                allSql.Add(ConceptApplicationRepository.DeleteMetadataSql(ca));
+                allSql.Add(_conceptApplicationRepository.DeleteMetadataSql(ca));
 
                 allSql.Add(Sql.Get("DatabaseGenerator_CommitAfterDDL")); // Oracle must commit metadata changes before modifying next database object, to ensure metadata consistency if next DDL command fails (Oracle db automatically commits changes on DDL commands, so the previous DDL command has already been committed).
             }
@@ -511,19 +515,19 @@ namespace Rhetos.DatabaseGenerator
 
         protected int ApplyChangesToDatabase_Insert(List<string> allSql, List<NewConceptApplication> toBeInserted, List<NewConceptApplication> newApplications)
         {
-            DirectedGraph.TopologicalSort(toBeInserted, GetDependencyPairs(newApplications));
+            Graph.TopologicalSort(toBeInserted, GetDependencyPairs(newApplications));
 
             int reportInsertedCount = 0;
             foreach (var ca in toBeInserted)
             {
-                Log(ca, "Adding new concept");
+                Log(ca, "Creating");
 
                 string[] createSqlScripts = SplitSqlScript(ca.CreateQuery);
                 allSql.AddRange(createSqlScripts);
                 if (createSqlScripts.Length > 0)
                     reportInsertedCount++;
 
-                allSql.AddRange(ConceptApplicationRepository.InsertMetadataSql(ca));
+                allSql.AddRange(_conceptApplicationRepository.InsertMetadataSql(ca));
 
                 allSql.Add(Sql.Get("DatabaseGenerator_CommitAfterDDL")); // Oracle must commit metadata changes before modifying next database object, to ensure metadata consistency if next DDL command fails (Oracle db automatically commits changes on DDL commands, so the previous DDL command has already been committed).
             }
@@ -540,7 +544,7 @@ namespace Rhetos.DatabaseGenerator
 
             foreach (var ca in unchangedApplications)
             {
-                var updateMetadataSql = ConceptApplicationRepository.UpdateMetadataSql(ca, oldApplicationsByKey[ca.GetConceptApplicationKey()]);
+                var updateMetadataSql = _conceptApplicationRepository.UpdateMetadataSql(ca, oldApplicationsByKey[ca.GetConceptApplicationKey()]);
                 if (updateMetadataSql.Count() > 0)
                 {
                     Log(ca, "Updating metadata");
@@ -560,7 +564,7 @@ namespace Rhetos.DatabaseGenerator
 
         protected void Log(ConceptApplication conceptApplication, string action)
         {
-            _logger.Info("{0} {1}, ID={2}.", action, conceptApplication.GetConceptApplicationKey(), SqlUtility.GuidToString(conceptApplication.Id));
+            _conceptsLogger.Trace("{0} {1}, ID={2}.", action, conceptApplication.GetConceptApplicationKey(), SqlUtility.GuidToString(conceptApplication.Id));
         }
 
         protected void VerifyIntegrity()

@@ -41,7 +41,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Autofac, Version=2.5.2.830, Culture=neutral, PublicKeyToken=17863af14b0044da, processorArchitecture=MSIL">
+    <Reference Include="Autofac">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Source\Rhetos\bin\Autofac.dll</HintPath>
     </Reference>
@@ -54,6 +54,21 @@
     <Reference Include="NHibernate, Version=3.1.0.4000, Culture=neutral, PublicKeyToken=aa95f207798dfdb4, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\Source\Rhetos\bin\NHibernate.dll</HintPath>
+    </Reference>
+    <Reference Include="Rhetos.Configuration.Autofac">
+      <HintPath>..\..\..\Source\Rhetos\bin\Rhetos.Configuration.Autofac.dll</HintPath>
+    </Reference>
+    <Reference Include="Rhetos.Extensibility, Version=0.9.14.1, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\Source\Rhetos\bin\Rhetos.Extensibility.dll</HintPath>
+    </Reference>
+    <Reference Include="Rhetos.Extensibility.Interfaces, Version=0.9.19.3, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\Source\Rhetos\bin\Rhetos.Extensibility.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Rhetos.Security, Version=0.9.14.1, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\Source\Rhetos\bin\Rhetos.Security.dll</HintPath>
     </Reference>
     <Reference Include="Rhetos.Utilities, Version=2.3.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -144,13 +159,16 @@
     <Compile Include="ActionTest.cs" />
     <Compile Include="BinaryTest.cs" />
     <Compile Include="AutoCodeTest.cs" />
-    <Compile Include="CommonTestExecutionContext.cs" />
     <Compile Include="ComputationsUtilityTest.cs" />
     <Compile Include="ComputedTest.cs" />
     <Compile Include="AuditablePropertiesTest.cs" />
     <Compile Include="CloningTest.cs" />
-    <Compile Include="ClaimRepositoryTest.cs" />
+    <Compile Include="Helpers\DateTimeHelper.cs" />
+    <Compile Include="PolymorphicTest.cs" />
     <Compile Include="MultipleValidationsTest.cs" />
+    <Compile Include="RowPermissionsRulesTest.cs" />
+    <Compile Include="RowPermissionsDemo.cs" />
+    <Compile Include="SqlIndexTest.cs" />
     <Compile Include="SystemRequiredTest.cs" />
     <Compile Include="DenyUserEditTest.cs" />
     <Compile Include="DeactivatableTest.cs" />
@@ -172,7 +190,7 @@
     <Compile Include="PersistedAllPropertiesTest.cs" />
     <Compile Include="DenySaveTest.cs" />
     <Compile Include="RequiredPropertyTest.cs" />
-    <Compile Include="SqlFilter.cs" />
+    <Compile Include="SqlFilterTest.cs" />
     <Compile Include="SqlWorkaroundsTest.cs" />
     <Compile Include="UniqueTest.cs" />
     <Compile Include="EntityTest.cs" />
@@ -187,9 +205,9 @@
     <Compile Include="QueryableExtensionTest.cs" />
     <Compile Include="QueryDataSourceCommandTest.cs" />
     <Compile Include="SqlQueryableTest.cs" />
-    <Compile Include="TestExecutionContext.cs" />
     <Compile Include="ModuleRepositioryTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RowPermissionsTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="READ_ME.txt" />

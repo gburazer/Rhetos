@@ -31,33 +31,6 @@ namespace Rhetos.Utilities.Test
     [TestClass()]
     public class SqlUtilityTest
     {
-        [TestMethod()]
-        public void ValidateNameTest()
-        {
-            string[] validNames = new[] {
-                "abc", "ABC", "i",
-                "a12300", "a1a",
-                "_abc", "_123", "_", "a_a_"
-            };
-
-            string[] invalidNames = new[] {
-                "0", "2asdasd", "123", "1_",
-                null, "",
-                " abc", "abc ", " ",
-                "!", "@", "#", "a!", "a@", "a#",
-                "ač", "č",
-            };
-
-            foreach (string name in validNames)
-                SqlUtility.CheckIdentifier(name);
-
-            foreach (string name in invalidNames)
-            {
-                Console.WriteLine("Testing invalid name '" + name + "'.");
-                TestUtility.ShouldFail(() => SqlUtility.CheckIdentifier(name), "database object name", name != null ? "'" + name + "'"  : "null");
-            }
-        }
-
         [TestMethod]
         public void OracleLimitIdentifierLength()
         {
@@ -211,6 +184,22 @@ namespace Rhetos.Utilities.Test
                 var result = SqlUtility.ExtractUserInfo(test.Key == "<null>" ? null : test.Key);
                 Assert.AreEqual(test.Value, (result.UserName ?? "null") + "|" + (result.Workstation ?? "null"), "Input: " + test.Key);
             }
+        }
+
+        [TestMethod]
+        public void QuoteIdentifier()
+        {
+            var tests = new Dictionary<string, string>
+            {
+                { "abc", "[abc]" },
+                { "abc[", "[abc[]" },
+                { "abc]", "[abc]]]" },
+                { "[][][]", "[[]][]][]]]" },
+                { " '\" ", "[ '\" ]" }
+            };
+
+            foreach (var test in tests)
+                Assert.AreEqual(test.Value, SqlUtility.QuoteIdentifier(test.Key));
         }
     }
 }

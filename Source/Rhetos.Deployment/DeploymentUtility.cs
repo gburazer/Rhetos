@@ -17,16 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using Rhetos.Logging;
 using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Xml;
-using Rhetos.Utilities;
 
 namespace Rhetos.Deployment
 {
@@ -43,34 +35,22 @@ namespace Rhetos.Deployment
             Console.BackgroundColor = oldBg;
         }
 
-        public static void Touch(FileInfo file)
-        {
-            var isReadOnly = file.IsReadOnly;
-            file.IsReadOnly = false;
-            file.LastWriteTime = DateTime.Now;
-            file.IsReadOnly = isReadOnly;
-        }
+        private static ILogProvider _initializationLogProvider;
 
-        public static void PrepareRhetosDatabase(ISqlExecuter sqlExecuter)
+        /// <summary>To be used during system initialization while the IoC container is yet not built.
+        /// In all other situations the ILogProvider should be resolved from the IoC container.</summary>
+        public static ILogProvider InitializationLogProvider
         {
-            string rhetosDatabaseScriptResourceName = "Rhetos.Deployment.RhetosDatabase." + SqlUtility.DatabaseLanguage + ".sql";
-            var resourceStream = typeof(DeploymentUtility).Assembly.GetManifestResourceStream(rhetosDatabaseScriptResourceName);
-            if (resourceStream == null)
-                throw new FrameworkException("Cannot find resource '" + rhetosDatabaseScriptResourceName + "'.");
-            var sql = new StreamReader(resourceStream).ReadToEnd();
-
-            var sqlScripts = sql.Split(new[] {"\r\nGO\r\n"}, StringSplitOptions.RemoveEmptyEntries).Where(s => !String.IsNullOrWhiteSpace(s));
-            sqlExecuter.ExecuteSql(sqlScripts);
-        }
-
-        public static string QuoteSqlIdentifier(string sqlIdentifier)
-        {
-            if (SqlUtility.DatabaseLanguage == "MsSql")
+            get
             {
-                sqlIdentifier = sqlIdentifier.Replace("]", "]]");
-                return "[" + sqlIdentifier + "]";
+                if (_initializationLogProvider == null)
+                    _initializationLogProvider = new NLogProvider();
+                return _initializationLogProvider;
             }
-            throw new FrameworkException("Database language " + SqlUtility.DatabaseLanguage + " not supported.");
+            set
+            {
+                _initializationLogProvider = value;
+            }
         }
     }
 }

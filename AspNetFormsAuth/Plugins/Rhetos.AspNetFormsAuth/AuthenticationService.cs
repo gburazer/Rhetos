@@ -18,6 +18,7 @@
 */
 
 using Rhetos.Dom.DefaultConcepts;
+using Rhetos.Extensibility;
 using Rhetos.Logging;
 using Rhetos.Security;
 using Rhetos.Utilities;
@@ -33,6 +34,8 @@ using WebMatrix.WebData;
 
 namespace Rhetos.AspNetFormsAuth
 {
+    #region Service parameters
+
     public class LoginParameters
     {
         public string UserName { get; set; }
@@ -45,10 +48,10 @@ namespace Rhetos.AspNetFormsAuth
         public void Validate()
         {
             if (string.IsNullOrWhiteSpace(UserName))
-                throw new UserException("Empty username is not allowed.");
+                throw new UserException("Empty UserName is not allowed.");
 
             if (string.IsNullOrWhiteSpace(Password))
-                throw new UserException("Empty password is not allowed.");
+                throw new UserException("Empty Password is not allowed.");
         }
     }
 
@@ -61,10 +64,10 @@ namespace Rhetos.AspNetFormsAuth
         public void Validate()
         {
             if (string.IsNullOrWhiteSpace(UserName))
-                throw new UserException("Empty username is not allowed.");
+                throw new UserException("Empty UserName is not allowed.");
 
             if (string.IsNullOrWhiteSpace(Password))
-                throw new UserException("Empty password is not allowed.");
+                throw new UserException("Empty Password is not allowed.");
         }
     }
 
@@ -76,10 +79,10 @@ namespace Rhetos.AspNetFormsAuth
         public void Validate()
         {
             if (string.IsNullOrWhiteSpace(OldPassword))
-                throw new UserException("Empty old password is not allowed.");
+                throw new UserException("Empty OldPassword is not allowed.");
 
             if (string.IsNullOrWhiteSpace(NewPassword))
-                throw new UserException("Empty new password is not allowed.");
+                throw new UserException("Empty NewPassword is not allowed.");
         }
     }
 
@@ -90,16 +93,69 @@ namespace Rhetos.AspNetFormsAuth
         public void Validate()
         {
             if (string.IsNullOrWhiteSpace(UserName))
-                throw new UserException("Empty username is not allowed.");
+                throw new UserException("Empty UserName is not allowed.");
         }
     }
 
-    // TODO: Delete when stateless session is implemented. A separate PasswordAttemptsLimit class is needed to allow editing of the loaded data (TimeoutInSeconds) that is not bound to the ORM. 
+    public class GeneratePasswordResetTokenParameters
+    {
+        public string UserName { get; set; }
+
+        public const int DefaultTokenExpirationInMinutes = 1440;
+
+        /// <summary>
+        /// Optional. If not set (0 value), the DefaultTokenExpirationInMinutes will be used.
+        /// </summary>
+        public int TokenExpirationInMinutesFromNow { get; set; }
+
+        public void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(UserName))
+                throw new UserException("Empty UserName is not allowed.");
+        }
+    }
+
+    public class SendPasswordResetTokenParameters
+    {
+        public string UserName { get; set; }
+
+        /// <summary>
+        /// Used for future ISendPasswordResetToken extensibility.
+        /// For example, AdditionalClientInfo may contain answers to security questions, preferred method of communication or similar user provided information.
+        /// </summary>
+        public Dictionary<string, string> AdditionalClientInfo { get; set; }
+
+        public void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(UserName))
+                throw new UserException("Empty UserName is not allowed.");
+        }
+    }
+
+    public class ResetPasswordParameters
+    {
+        public string PasswordResetToken { get; set; }
+        public string NewPassword { get; set; }
+
+        public void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(PasswordResetToken))
+                throw new UserException("Empty PasswordResetToken is not allowed.");
+
+            if (string.IsNullOrWhiteSpace(NewPassword))
+                throw new UserException("Empty NewPassword is not allowed.");
+        }
+    }
+
+    // TODO: Delete when NHibernate stateless session is implemented. A separate PasswordAttemptsLimit class is needed to allow editing of the loaded data (TimeoutInSeconds) that is not bound to the ORM. 
     class PasswordAttemptsLimit : IPasswordAttemptsLimit
     {
+        public Guid ID { get; set; }
         public int? MaxInvalidPasswordAttempts { get; set; }
         public int? TimeoutInSeconds { get; set; }
     }
+
+    #endregion
 
     [ServiceContract]
     [AspNetCompatibilityRequirements(RequirementsMode = AspNetCompatibilityRequirementsMode.Required)]
@@ -110,17 +166,20 @@ namespace Rhetos.AspNetFormsAuth
         private readonly Lazy<IQueryableRepository<IPasswordStrength>> _passwordStrengthRules;
         private readonly Lazy<IList<PasswordAttemptsLimit>> _passwordAttemptsLimits;
         private readonly Lazy<ISqlExecuter> _sqlExecuter;
+        private readonly Lazy<ISendPasswordResetToken> _sendPasswordResetTokenPlugin;
 
         public AuthenticationService(
             ILogProvider logProvider,
             Lazy<IAuthorizationManager> authorizationManager,
             Lazy<IQueryableRepository<IPasswordStrength>> passwordStrengthRules,
             Lazy<IQueryableRepository<IPasswordAttemptsLimit>> passwordAttemptsLimitRepository,
-            Lazy<ISqlExecuter> sqlExecuter)
+            Lazy<ISqlExecuter> sqlExecuter,
+            Lazy<IEnumerable<ISendPasswordResetToken>> sendPasswordResetTokenPlugins)
         {
             _logger = logProvider.GetLogger("AspNetFormsAuth.AuthenticationService");
             _authorizationManager = authorizationManager;
             _sqlExecuter = sqlExecuter;
+            _sendPasswordResetTokenPlugin = new Lazy<ISendPasswordResetToken>(() => SinglePlugin(sendPasswordResetTokenPlugins));
 
             _passwordStrengthRules = passwordStrengthRules;
             _passwordAttemptsLimits = new Lazy<IList<PasswordAttemptsLimit>>(
@@ -136,26 +195,40 @@ namespace Rhetos.AspNetFormsAuth
                 });
         }
 
+        private ISendPasswordResetToken SinglePlugin(Lazy<IEnumerable<ISendPasswordResetToken>> plugins)
+        {
+            if (plugins.Value.Count() == 0)
+                throw new UserException("Sending the password reset token is not enabled on this server (the required plugin is not registered).");
+
+            if (plugins.Value.Count() > 1)
+                throw new FrameworkException("There is more than one plugin registered for sending the password reset token: "
+                    + string.Join(", ", plugins.Value.Select(plugin => plugin.GetType().FullName)) + ".");
+
+            return plugins.Value.Single();
+        }
+
         private void CheckPermissions(Claim claim)
         {
             bool allowed = _authorizationManager.Value.GetAuthorizations(new[] { claim }).Single();
             if (!allowed)
                 throw new UserException(string.Format(
-                    "You are not authorized for action '{0}' on resource '{1}', user '{2}'.",
+                    "You are not authorized for action '{0}' on resource '{1}', user '{2}'. The required security claim is not set.",
                     claim.Right, claim.Resource, WebSecurity.CurrentUserName));
         }
 
         [OperationContract]
         [WebInvoke(Method = "POST", UriTemplate = "/Login", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
-        public bool Login(LoginParameters loginData)
+        public bool Login(LoginParameters parameters)
         {
-            _logger.Trace(() => "Login: " + loginData.UserName);
-            loginData.Validate();
-            CheckPasswordFailuresBeforeLogin(loginData.UserName);
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace(() => "Login: " + parameters.UserName);
+            parameters.Validate();
+            CheckPasswordFailuresBeforeLogin(parameters.UserName);
 
             return SafeExecute(
-                () => WebSecurity.Login(loginData.UserName, loginData.Password, loginData.PersistCookie),
-                "Login", loginData.UserName);
+                () => WebSecurity.Login(parameters.UserName, parameters.Password, parameters.PersistCookie),
+                "Login", parameters.UserName);
         }
 
         private void CheckPasswordFailuresBeforeLogin(string userName)
@@ -195,48 +268,48 @@ namespace Rhetos.AspNetFormsAuth
 
         [OperationContract]
         [WebInvoke(Method = "POST", UriTemplate = "/SetPassword", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
-        public void SetPassword(SetPasswordParameters setPasswordData)
+        public void SetPassword(SetPasswordParameters parameters)
         {
-            _logger.Trace(() => "SetPassword: " + setPasswordData.UserName);
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace(() => "SetPassword: " + parameters.UserName);
             CheckPermissions(AuthenticationServiceClaims.SetPasswordClaim);
-            setPasswordData.Validate();
-            if (setPasswordData.IgnorePasswordStrengthPolicy)
+            parameters.Validate();
+            if (parameters.IgnorePasswordStrengthPolicy)
                 CheckPermissions(AuthenticationServiceClaims.IgnorePasswordStrengthPolicyClaim);
             else
-                CheckPasswordStrength(setPasswordData.Password);
+                CheckPasswordStrength(parameters.Password);
 
-            if (!WebSecurity.UserExists(setPasswordData.UserName))
-                throw new UserException("User '" + setPasswordData.UserName + "' is not registered.");
+            if (!WebSecurity.UserExists(parameters.UserName))
+                throw new UserException("User '" + parameters.UserName + "' is not registered."); // Providing this information is not a security issue, because this method requires admin credentials (SetPasswordClaim).
 
-            try
+            if (!IsAccountCreated(parameters.UserName))
             {
-                WebSecurity.CreateAccount(setPasswordData.UserName, setPasswordData.Password);
+                WebSecurity.CreateAccount(parameters.UserName, parameters.Password);
                 _logger.Trace("Password successfully initialized.");
             }
-            catch (MembershipCreateUserException ex)
+            else
             {
-                if (ex.Message != "The username is already in use.")
-                    throw;
-
-                var token = WebSecurity.GeneratePasswordResetToken(setPasswordData.UserName);
-                var changed = WebSecurity.ResetPassword(token, setPasswordData.Password);
+                var token = WebSecurity.GeneratePasswordResetToken(parameters.UserName);
+                var changed = WebSecurity.ResetPassword(token, parameters.Password);
                 if (!changed)
                     throw new UserException("Cannot change password.", "WebSecurity.ResetPassword returned 'false'.");
-
                 _logger.Trace("Password successfully changed.");
             }
         }
 
         [OperationContract]
         [WebInvoke(Method = "POST", UriTemplate = "/ChangeMyPassword", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
-        public bool ChangeMyPassword(ChangeMyPasswordParameters changeMyPasswordData)
+        public bool ChangeMyPassword(ChangeMyPasswordParameters parameters)
         {
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
             _logger.Trace(() => "ChangeMyPassword: " + WebSecurity.CurrentUserName);
-            changeMyPasswordData.Validate();
-            CheckPasswordStrength(changeMyPasswordData.NewPassword);
+            parameters.Validate();
+            CheckPasswordStrength(parameters.NewPassword);
 
             return SafeExecute(
-                () => WebSecurity.ChangePassword(WebSecurity.CurrentUserName, changeMyPasswordData.OldPassword, changeMyPasswordData.NewPassword),
+                () => WebSecurity.ChangePassword(WebSecurity.CurrentUserName, parameters.OldPassword, parameters.NewPassword),
                 "ChangeMyPassword", WebSecurity.CurrentUserName);
         }
 
@@ -255,13 +328,15 @@ namespace Rhetos.AspNetFormsAuth
 
         [OperationContract]
         [WebInvoke(Method = "POST", UriTemplate = "/UnlockUser", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
-        public void UnlockUser(UnlockUserParameters unlockUserData)
+        public void UnlockUser(UnlockUserParameters parameters)
         {
-            _logger.Trace(() => "Unlock user: " + unlockUserData.UserName);
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace(() => "UnlockUser: " + parameters.UserName);
             CheckPermissions(AuthenticationServiceClaims.UnlockUserClaim);
-            unlockUserData.Validate();
+            parameters.Validate();
 
-            string sql = string.Format(UnlockUserSql, SqlUtility.QuoteText(unlockUserData.UserName));
+            string sql = string.Format(UnlockUserSql, SqlUtility.QuoteText(parameters.UserName));
             _sqlExecuter.Value.ExecuteSql(new[] { sql });
         }
 
@@ -274,6 +349,132 @@ namespace Rhetos.AspNetFormsAuth
                 INNER JOIN Common.Principal p ON p.AspNetUserId = wm.UserId
             WHERE
                 p.Name = {0}";
+
+        [OperationContract]
+        [WebInvoke(Method = "POST", UriTemplate = "/GeneratePasswordResetToken", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
+        public string GeneratePasswordResetToken(GeneratePasswordResetTokenParameters parameters)
+        {
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace(() => "GeneratePasswordResetToken: " + parameters.UserName);
+            CheckPermissions(AuthenticationServiceClaims.GeneratePasswordResetTokenClaim);
+            parameters.Validate();
+
+            return GeneratePasswordResetTokenInternal(parameters);
+        }
+
+        private string GeneratePasswordResetTokenInternal(GeneratePasswordResetTokenParameters parameters)
+        {
+            if (!WebSecurity.UserExists(parameters.UserName)) // Providing this information is not a security issue, because this method requires admin credentials (GeneratePasswordResetTokenClaim).
+                throw new UserException("User '" + parameters.UserName + "' is not registered.");
+
+            if (!IsAccountCreated(parameters.UserName))
+            {
+                _logger.Trace(() => "GeneratePasswordResetTokenInternal creating security account: " + parameters.UserName);
+                WebSecurity.CreateAccount(parameters.UserName, Guid.NewGuid().ToString());
+            }
+
+            return parameters.TokenExpirationInMinutesFromNow != 0
+                ? WebSecurity.GeneratePasswordResetToken(parameters.UserName, parameters.TokenExpirationInMinutesFromNow)
+                : WebSecurity.GeneratePasswordResetToken(parameters.UserName, GeneratePasswordResetTokenParameters.DefaultTokenExpirationInMinutes);
+        }
+
+        [OperationContract]
+        [WebInvoke(Method = "POST", UriTemplate = "/SendPasswordResetToken", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
+        public void SendPasswordResetToken(SendPasswordResetTokenParameters parameters)
+        {
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace("SendPasswordResetToken " + parameters.UserName);
+            parameters.Validate();
+
+            const string logErrorFormat = "SendPasswordResetToken failed for {0}: {1}";
+
+            try
+            {
+                string passwordResetToken;
+                try
+                {
+                    var tokenParameters = new GeneratePasswordResetTokenParameters
+                    {
+                        UserName = parameters.UserName,
+                        TokenExpirationInMinutesFromNow = Int32.Parse(ConfigUtility.GetAppSetting("AspNetFormsAuth.SendPasswordResetToken.ExpirationInMinutes") ?? "1440")
+                    };
+                    passwordResetToken = GeneratePasswordResetTokenInternal(tokenParameters);
+                }
+                // Providing an error information to the client might be a security issue, because this method allows anonymous access.
+                catch (UserException ex)
+                {
+                    _logger.Trace(logErrorFormat, parameters.UserName, ex);
+                    return;
+                }
+                catch (ClientException ex)
+                {
+                    _logger.Info(logErrorFormat, parameters.UserName, ex);
+                    return;
+                }
+
+                // The plugin may choose it's own client error messages (UserException and ClientException will not be suppressed).
+                _sendPasswordResetTokenPlugin.Value.SendPasswordResetToken(parameters.UserName, parameters.AdditionalClientInfo, passwordResetToken);
+            }
+            catch (Exception ex)
+            {
+                if (ex is UserException || ex is ClientException)
+                    ExceptionsUtility.Rethrow(ex);
+
+                _logger.Error(logErrorFormat, parameters.UserName, ex);
+                throw new FrameworkException("Internal server error occurred. See RhetosServer.log for more information.");
+            }
+        }
+
+        /// <summary>
+        /// This method is similar to SetPassword, but there is a difference in access permissions.
+        /// ResetPassword allows anonymous access, while SetPassword needs a specific authorization.
+        /// </summary>
+        /// <param name="parameters"></param>
+        /// <returns></returns>
+        [OperationContract]
+        [WebInvoke(Method = "POST", UriTemplate = "/ResetPassword", BodyStyle = WebMessageBodyStyle.Bare, RequestFormat = WebMessageFormat.Json, ResponseFormat = WebMessageFormat.Json)]
+        public bool ResetPassword(ResetPasswordParameters parameters)
+        {
+            if (parameters == null)
+                throw new ClientException("It is not allowed to call this authentication service method with no parameters provided.");
+            _logger.Trace("ResetPassword");
+            parameters.Validate();
+            CheckPasswordStrength(parameters.NewPassword);
+
+            int userId = WebSecurity.GetUserIdFromPasswordResetToken(parameters.PasswordResetToken);
+            SimpleMembershipProvider provider = (SimpleMembershipProvider)Membership.Provider;
+            string userName = provider.GetUserNameFromId(userId);
+            _logger.Trace(() => "ResetPassword " + userName);
+
+            bool successfulReset = SafeExecute(
+                () => WebSecurity.ResetPassword(parameters.PasswordResetToken, parameters.NewPassword),
+                "ResetPassword", userName);
+
+            if (successfulReset && !string.IsNullOrEmpty(userName))
+                SafeExecute( // Login does not need to be successful for this function to return true.
+                    () => { Login(new LoginParameters { UserName = userName, Password = parameters.NewPassword, PersistCookie = false }); },
+                    "Login after ResetPassword", userName);
+
+            return successfulReset;
+        }
+
+        //==================================================
+
+        bool IsAccountCreated(string userName)
+        {
+            string sql = string.Format(IsAccountCreatedSql, SqlUtility.QuoteText(userName));
+            bool exists = false;
+            _sqlExecuter.Value.ExecuteReader(sql, reader => exists = true);
+            return exists;
+        }
+
+        const string IsAccountCreatedSql =
+            @"SELECT TOP 1 1 FROM Common.Principal cp
+                INNER JOIN webpages_Membership wm
+                    ON wm.UserId = cp.AspNetUserId
+            WHERE cp.Name = {0}";
 
         bool SafeExecute(Func<bool> action, string actionName, string context)
         {

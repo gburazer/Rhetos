@@ -18,8 +18,8 @@ Module TestAllProperties
 		Extends TestAllProperties.Base;
 		ShortString Name { SqlIndex; }
 		DateTime Start;
-		Reference TheParent TestAllProperties.Parent { Detail; } // Instead of full Detail concept, only CascadeDelete base concept will be used.
-		Unique TestAllProperties.Source.Name TestAllProperties.Source.Start; // Instead of full Unique concept, only SqlIndex base concept will be used.
+		Reference TheParent TestAllProperties.Parent { Detail; } // Instead of full Detail concept, only CascadeDelete base concept should  be copied to TestAllPropertiesCopyAllFeatures.
+		Unique TestAllProperties.Source.Name TestAllProperties.Source.Start; // Instead of full Unique concept, only SqlIndex base concept should  be copied to TestAllPropertiesCopyAllFeatures.
 		Unique TestAllProperties.Source.Name TestAllProperties.Source.Start TestAllProperties.Source.TheParent;
 	}
 
@@ -121,7 +121,12 @@ Module Test9
 	Persisted DocumentAggregates Test9.ComputeDocumentAggregates
 	{
 		AllProperties;
-		KeepSynchronized 'documentAggregates => documentAggregates.Where(item => !item.Base.Name.Contains("locked"))';
+		KeepSynchronized '(documentAggregates, repository) =>
+        {
+            var ids = documentAggregates.Select(d => d.ID).ToList();
+            var lockedDocuments = new HashSet<Guid>(repository.Test9.Document.Filter(ids).Where(d => !d.Name.Contains("locked")).Select(d => d.ID));
+            return documentAggregates.Where(da => lockedDocuments.Contains(da.ID)).ToList();
+        }';
 	}
 }
 
@@ -235,6 +240,66 @@ Module TestFilter
         FilterBy ComposableFilterBrowseLoader '(repository, parameter) => repository.TestFilter.ComposableFilterBrowse.Query().Where(item => item.Name.Contains(parameter.Pattern)).ToArray()';
     }
     Parameter ComposableFilterBrowseLoader { ShortString Pattern; }
+    
+
+    SqlQueryable FixedData
+		"SELECT ID=CONVERT(UNIQUEIDENTIFIER, 'DEC7CD4A-11EC-40E3-8463-5D2EF411449B'), Name='a', Num=1
+		UNION ALL SELECT CONVERT(UNIQUEIDENTIFIER, 'C7BC64CB-B62C-459E-9C3A-D029BED616B6'), 'b', 2"
+	{
+		ShortString Name;
+		Integer Num;
+        
+        ComposableFilterBy ComposableFilterWithContext '(items, repository, parameter, context) =>
+            new FixedData[] { new FixedData { Name = context.UserInfo.UserName } }.AsQueryable()'
+        {
+            UseExecutionContext;
+        }
+	}
+    
+    Parameter ComposableFilterWithContext;
+	
+	Entity ExternalFilter
+	{
+		ShortString Name;
+		ComposableFilterBy 'System.DateTime' '(source, repository, parameter) =>
+			{
+				if (parameter == null)
+					return source.Where(item => item.Name.StartsWith("dnull"));
+				else if (parameter == default(System.DateTime))
+					return source.Where(item => item.Name.StartsWith("ddef"));
+				else
+					return source.Where(item => item.Name.StartsWith("date"));
+			}';
+		ComposableFilterBy 'System.String' '(source, repository, parameter) =>
+			{
+				if (parameter == null)
+					return source.Where(item => item.Name.StartsWith("snull"));
+				else
+					return source.Where(item => item.Name.StartsWith("str"));
+			}';
+	}
+	
+	Entity AutoFilter1
+	{
+		ShortString Name;
+		ItemFilter AList 'item => item.Name.StartsWith("a")'
+		{
+			ApplyOnClientRead;
+		}
+	}
+	
+	Entity AutoFilter2
+	{
+		ShortString Name;
+	}
+	
+	Browse AutoFilter2Browse TestFilter.AutoFilter2
+	{
+		Take Name2 'Name';
+		ComposableFilterBy 'System.String' '(source, repository, parameter) => source.Where(item => item.Name2.StartsWith("b")).Select(item =>
+			new TestFilter.AutoFilter2Browse { ID = item.ID, Base = item.Base, Name2 = item.Name2 + "x"})';
+		ApplyFilterOnClientRead 'System.String';
+	}
 }
 
 Module TestFilter2;
@@ -269,19 +334,6 @@ Module TestDenySave
 
 Module TestLockItems
 {
-	Entity Simple2 {
-		Reference TestReference TestLockItems.Simple;
-		
-		Integer Count;
-		ShortString Name;
-				
-		ItemFilter CountNegative 'item => item.Count < 0';
-		LockProperty Name.CountNegative 'Name is locked if count negative.';
-		
-		LockProperty TestReference.CountNegative 'TestReference is locked if count negative.';
-	}
-	
-	
 	Entity Simple
 	{
 		ShortString Name;
@@ -292,6 +344,21 @@ Module TestLockItems
 		
 		ItemFilter CountNegative 'item => item.Count < 0';
 		LockProperty Name.CountNegative 'Name is locked if count negative.';
+	}
+	
+	Entity Simple2
+	{
+		ShortString Name;
+		Integer Count;
+		Reference TestReference TestLockItems.Simple { CascadeDelete; }
+		
+		ItemFilter CountNegative 'item => item.Count < 0';
+		LockProperty Name.CountNegative 'Name is locked if count negative.';
+		
+		LockProperty TestReference.CountNegative 'TestReference is locked if count negative.';
+		
+		ItemFilter LockExceptName 'item => item.Name.StartsWith("LockExceptName")';
+		LockExcept LockExceptName 'The record is locked except the Name property.' 'Name';
 	}
 }
 
@@ -477,5 +544,48 @@ Module TestComputedFrom
         
         DateTime Start { CreationTime; }
         DateTime LastModifiedName1bx { ModificationTimeOf TestComputedFrom.MultiSync.Name1bx; }
+    }
+	
+	Entity ComputedWithAutoCode
+	{
+		ShortString Comp;
+		ShortString Code { AutoCode; }
+		
+		ComputedFrom TestComputedFrom.ComputedWithAutoCodeSource { AllProperties; ComputeForNewItems; }
+	}
+	
+	SqlQueryable ComputedWithAutoCodeSource "SELECT ID, Comp = 'abc' FROM ComputedWithAutoCode"
+	{
+		ShortString Comp;
+	}
+    
+    //==========================================================
+    
+    Entity SyncByKeySource
+    {
+        Integer Name1;
+        ShortString Name2;
+        ShortString Data;
+        
+        ChangesOnChangedItems TestComputedFrom.SyncByKeySource 'FilterAll' 'changedItems => new FilterAll()';
+    }
+    
+    Persisted SyncByKeyTarget TestComputedFrom.SyncByKeySource
+    {
+        AllProperties;
+        KeepSynchronized;
+        KeyProperties 'Name1 Name2';
+        
+        ShortString Control;
+    }
+    
+    Entity SyncByKeyTarget2
+    {
+        Integer Name1x { ComputedFrom TestComputedFrom.SyncByKeySource.Name1 { KeyProperty; } }
+        ShortString Name2x { ComputedFrom TestComputedFrom.SyncByKeySource.Name2 { KeyProperty; } }
+        ShortString Datax { ComputedFrom TestComputedFrom.SyncByKeySource.Data; }
+        ComputedFrom TestComputedFrom.SyncByKeySource { KeepSynchronized; }
+        
+        ShortString Control;
     }
 }

@@ -28,6 +28,7 @@ using Rhetos.Security;
 
 namespace Rhetos.Processing.DefaultCommands
 {
+    [Obsolete("Use ReadCommand")]
     [Export(typeof(IClaimProvider))]
     [ExportMetadata(MefProvider.Implements, typeof(QueryDataSourceCommandInfo))]
     public class QueryDataSourceCommandClaims : IClaimProvider
@@ -40,13 +41,7 @@ namespace Rhetos.Processing.DefaultCommands
 
         public IList<Claim> GetAllClaims(IDslModel dslModel)
         {
-            List<Claim> allClaims =
-                (from c in dslModel.Concepts
-                 let dataStructure = c as DataStructureInfo
-                 where dataStructure != null
-                 select new Claim(dataStructure.Module.Name + "." + dataStructure.Name, "Read")).ToList();
-
-            return allClaims;
+            return new Claim[] { }; // ReadCommandClaims will generate Read claims.
         }
     }
 }

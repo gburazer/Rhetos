@@ -18,24 +18,68 @@
 */
 
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-
 namespace Rhetos.Dom.DefaultConcepts
 {
     /// <summary>
-    /// IFilterRepository implementation of this filter is expected to have performance and memory EFFICIENT filtering.
-    /// For example, if a repository loads data from a relational database, the filtering condition should be propagated
-    /// to SQL so that only data that is already filtered will be loaded from database to application server.
+    /// FilterCriteria is a generic filter's element that defines a filter by property value or a predefined filter call.
     /// 
-    /// It is possible for IFilterRepository implementation to fail with NotSupportedException if the given filter is
-    /// too complex to be efficiently computed. In such situations, a specific filter should be implemented and used.
+    /// If a data structure's repository implements a Query, Load or Filter function with IEnumerable&lt;FilterCriteria&gt; argument,
+    /// it will be used when reading data by GenericRepository or a server command.
     /// </summary>
     public class FilterCriteria
     {
+        /// <summary>
+        /// Property name.
+        /// Either "Property" or "Filter" member should be set.
+        /// </summary>
         public string Property { get; set; }
+
+        /// <summary>
+        /// Predefined filter name (filter type). May be a data structure name form DSL script (Common.Principal, e.g.).
+        /// Either "Property" or "Filter" member should be set.
+        /// </summary>
+        public string Filter { get; set; }
+
+        /// <summary>
+        /// Optional when Filter is set.
+        /// </summary>
         public string Operation { get; set; }
+
+        /// <summary>
+        /// Filter parameter.
+        /// Optional when Filter is set.
+        /// </summary>
         public object Value { get; set; }
+
+        /// <summary>
+        /// Create a property filter.
+        /// </summary>
+        public FilterCriteria(string property, string operation, object value)
+        {
+            Property = property;
+            Operation = operation;
+            Value = value;
+        }
+
+        /// <summary>
+        /// Create a predefined filter.
+        /// </summary>
+        public FilterCriteria(Type filterType)
+        {
+            Filter = filterType.FullName;
+        }
+
+        /// <summary>
+        /// Create a predefined filter.
+        /// </summary>
+        public FilterCriteria(object filterValue)
+        {
+            Filter = filterValue.GetType().FullName;
+            Value = filterValue;
+        }
+
+        public FilterCriteria()
+        {
+        }
     }
 }

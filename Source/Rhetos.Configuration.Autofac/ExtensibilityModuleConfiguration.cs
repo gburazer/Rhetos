@@ -17,14 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Autofac;
-using System.ComponentModel.Composition.Hosting;
-using System.IO;
-using Autofac.Integration.Mef;
 using Rhetos.Extensibility;
 using System.Diagnostics.Contracts;
 
@@ -38,14 +31,7 @@ namespace Rhetos.Configuration.Autofac
 
             builder.RegisterGeneric(typeof(PluginsMetadataCache<>)).SingleInstance();
             builder.RegisterGeneric(typeof(PluginsContainer<>)).As(typeof(IPluginsContainer<>)).InstancePerLifetimeScope();
-
-            builder.RegisterType<GeneratorPlugins>();
-            Rhetos.Extensibility.PluginsUtility.RegisterPlugins<IGenerator>(builder);
-
-            builder.RegisterType<ServerInitializationPlugins>();
-            Rhetos.Extensibility.PluginsUtility.RegisterPlugins<IServerInitializer>(builder);
-
-            PluginsUtility.RegisterPluginModules(builder);
+            Plugins.FindAndRegisterModules(builder);
 
             base.Load(builder);
         }

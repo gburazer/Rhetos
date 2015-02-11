@@ -20,6 +20,8 @@
     </SccAuxPath>
     <SccProvider>
     </SccProvider>
+    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\..\</SolutionDir>
+    <RestorePackages>true</RestorePackages>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -39,9 +41,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Autofac, Version=2.5.2.830, Culture=neutral, PublicKeyToken=17863af14b0044da, processorArchitecture=MSIL">
-      <HintPath>..\..\..\External\Autofac\Autofac.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="Autofac">
+      <HintPath>..\..\..\packages\Autofac.3.5.2\lib\net40\Autofac.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
@@ -53,7 +54,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AutofacModuleConfiguration.cs" />
     <Compile Include="CommonConceptsConfiguration.cs" />
+    <Compile Include="ReadCommand.cs" />
     <Compile Include="ExecuteActionCommand.cs" />
     <Compile Include="DownloadReportCommand.cs" />
     <Compile Include="PingCommand.cs" />
@@ -66,7 +69,9 @@
     <Compile Include="Security\DownloadReportCommandClaims.cs" />
     <Compile Include="Security\LoadDslModelCommandClaims.cs" />
     <Compile Include="Security\QueryDataSourceCommandClaims.cs" />
+    <Compile Include="Security\ReadCommandClaims.cs" />
     <Compile Include="Security\SaveCommandClaims.cs" />
+    <Compile Include="ServerCommandsUtility.cs" />
   </ItemGroup>
   <ItemGroup>
     <CodeAnalysisDictionary Include="..\..\..\CodeAnalysisDictionary.xml">
@@ -74,6 +79,10 @@
     </CodeAnalysisDictionary>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Source\Rhetos.Logging.Interfaces\Rhetos.Logging.Interfaces.csproj">
+      <Project>{bb7e5668-1b43-4fce-a832-444cc57fee80}</Project>
+      <Name>Rhetos.Logging.Interfaces</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\Source\Rhetos.Utilities\Rhetos.Utilities.csproj">
       <Project>{71e63722-57bc-41df-9ff5-57ecc67e4bc1}</Project>
       <Name>Rhetos.Utilities</Name>
@@ -131,11 +140,21 @@
       <Name>Rhetos.Processing.DefaultCommands.Interfaces</Name>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>
     </PostBuildEvent>
   </PropertyGroup>
+  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SolutionDir)\.nuget\NuGet.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\.nuget\NuGet.targets'))" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

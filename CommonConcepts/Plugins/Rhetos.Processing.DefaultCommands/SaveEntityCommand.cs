@@ -29,6 +29,7 @@ using Rhetos.Dom;
 using Rhetos.Dom.DefaultConcepts;
 using System.ComponentModel.Composition;
 using Rhetos.Extensibility;
+using Rhetos.Dsl.DefaultConcepts;
 
 namespace Rhetos.Processing.DefaultCommands
 {
@@ -37,27 +38,77 @@ namespace Rhetos.Processing.DefaultCommands
     public class SaveEntityCommand : ICommandImplementation
     {
         private readonly IIndex<string, IWritableRepository> _writableRepositories;
+        private readonly GenericRepositories _genericRepositories;
+        private readonly IPersistenceTransaction _persistenceTransaction;
+        private readonly ServerCommandsUtility _serverCommandsUtility;
 
-        public SaveEntityCommand(IIndex<string, IWritableRepository> writableRepositories)
+        public SaveEntityCommand(
+            IIndex<string, IWritableRepository> writableRepositories,
+            GenericRepositories genericRepositories,
+            IPersistenceTransaction persistenceTransaction,
+            ServerCommandsUtility serverCommandsUtility)
         {
             _writableRepositories = writableRepositories;
+            _genericRepositories = genericRepositories;
+            _persistenceTransaction = persistenceTransaction;
+            _serverCommandsUtility = serverCommandsUtility;
         }
 
-        public CommandResult Execute(ICommandInfo info)
+        public CommandResult Execute(ICommandInfo commandInfo)
         {
-            var saveInfo = info as SaveEntityCommandInfo;
+            var saveInfo = commandInfo as SaveEntityCommandInfo;
 
             if (saveInfo == null)
                 return CommandResult.Fail("CommandInfo does not implement SaveEntityCommandInfo");
 
-            var repository = _writableRepositories[saveInfo.Entity];
-            repository.Save(saveInfo.DataToInsert, saveInfo.DataToUpdate, saveInfo.DataToDelete, true);
+            if (saveInfo.Entity == null)
+                throw new ClientException("Invalid SaveEntityCommand argument: Entity is not set.");
 
+            // We need to check delete permissions before actually deleting items 
+            // and update items before AND after they are updated.
+            var genericRepository = _genericRepositories.GetGenericRepository(saveInfo.Entity);
+            bool valid = true;
+
+            var updateDeleteItems = ConcatenateNullable(saveInfo.DataToDelete, saveInfo.DataToUpdate);
+            if (updateDeleteItems != null)
+                valid = _serverCommandsUtility.CheckAllItemsWithinFilter(updateDeleteItems, RowPermissionsWriteInfo.FilterName, genericRepository);
+
+            if (valid)
+            {
+                var repository = _writableRepositories[saveInfo.Entity];
+                repository.Save(saveInfo.DataToInsert, saveInfo.DataToUpdate, saveInfo.DataToDelete, true);
+
+                var insertUpdateItems = ConcatenateNullable(saveInfo.DataToInsert, saveInfo.DataToUpdate);
+                // We rely that this call will only use IDs of the items, because other data might be dirty.
+                if (insertUpdateItems != null)
+                    valid = _serverCommandsUtility.CheckAllItemsWithinFilter(insertUpdateItems, RowPermissionsWriteInfo.FilterName, genericRepository);
+            }
+
+            if (!valid)
+            {
+                _persistenceTransaction.DiscardChanges();
+                throw new UserException("Insufficient permissions to write some or all of the data.", "DataStructure:" + saveInfo.Entity + ".");
+            }
+            
             return new CommandResult
             {
                 Message = "Comand executed",
                 Success = true
             };
+        }
+
+        private static IEntity[] ConcatenateNullable(IEntity[] a, IEntity[] b)
+        {
+            if (a != null && a.Length > 0)
+                if (b != null && b.Length > 0)
+                    return a.Concat(b).ToArray();
+                else
+                    return a;
+            else
+                if (b != null && b.Length > 0)
+                    return b;
+                else
+                    return null;
         }
     }
 }

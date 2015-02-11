@@ -25,12 +25,12 @@ using System;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Rhetos.Extensibility.AutofacConfiguration")]
+[assembly: AssemblyTitle("Rhetos.Configuration.Autofac")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Omega software")]
-[assembly: AssemblyProduct("Rhetos.Extensibility.AutofacConfiguration")]
-[assembly: AssemblyCopyright("Copyright (C) Omega software 2014")]
+[assembly: AssemblyProduct("Rhetos.Configuration.Autofac")]
+[assembly: AssemblyCopyright("Copyright (C) Omega software 2015")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -52,6 +52,6 @@ using System;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("0.9.14.1")]
-[assembly: AssemblyFileVersion("0.9.14.1")]
+[assembly: AssemblyVersion("0.9.24.1")]
+[assembly: AssemblyFileVersion("0.9.24.1")]
 [assembly: CLSCompliantAttribute(true)]

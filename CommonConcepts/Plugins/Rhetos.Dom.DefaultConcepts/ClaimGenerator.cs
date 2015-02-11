@@ -42,19 +42,20 @@ namespace Rhetos.Dom.DefaultConcepts
         private readonly IPluginsContainer<IClaimProvider> _claimProviders;
         private readonly IDslModel _dslModel;
         private readonly ILogger _performanceLogger;
-        private readonly ILogger _logger;
-        private readonly IClaimRepository _claimRepository;
+        /// <summary>Special logger for keeping track of inserted/updated/deleted claims.</summary>
+        private readonly ILogger _claimsLogger;
+        private readonly GenericRepository<ICommonClaim> _claimRepository;
 
         public ClaimGenerator(
             IPluginsContainer<IClaimProvider> claimProviders,
             IDslModel dslModel,
             ILogProvider logProvider,
-            IClaimRepository claimRepository)
+            GenericRepository<ICommonClaim> claimRepository)
         {
             _claimProviders = claimProviders;
             _dslModel = dslModel;
             _performanceLogger = logProvider.GetLogger("Performance");
-            _logger = logProvider.GetLogger("ClaimGenerator");
+            _claimsLogger = logProvider.GetLogger("ClaimGenerator Claims");
             _claimRepository = claimRepository;
         }
 
@@ -67,32 +68,44 @@ namespace Rhetos.Dom.DefaultConcepts
         {
             var stopwatch = Stopwatch.StartNew();
 
-            var oldClaims = _claimRepository.LoadClaims();
-            _performanceLogger.Write(stopwatch, "ClaimGenerator.Generate: Read old claims.");
-
-            var newClaims = GetAllClaims();
+            var newClaims = GetNewActiveClaims();
             _performanceLogger.Write(stopwatch, "ClaimGenerator.Generate: Generate new claims.");
 
-            IList<Claim> insert;
-            IList<ICommonClaim> update, delete;
-            DiffClaims(oldClaims, newClaims, out insert, out update, out delete);
-            _performanceLogger.Write(stopwatch, "ClaimGenerator.Generate: Diff claims.");
-
-            _claimRepository.SaveClaims(insert, update, delete);
+            _claimRepository.InsertOrUpdateOrDeleteOrDeactivate(
+                newClaims,
+                new ClaimComparer(),
+                (x, y) => x.ClaimResource == y.ClaimResource && x.ClaimRight == y.ClaimRight && x.Active == y.Active,
+                new FilterAll(),
+                (dest, source) =>
+                {
+                    dest.ClaimResource = source.ClaimResource;
+                    dest.ClaimRight = source.ClaimRight;
+                    dest.Active = source.Active;
+                },
+                new DeactivateInsteadOfDelete(), // This is a filter on Common.Claim's repository, see ClaimRepositoryCodeGenerator.
+                LogSummary);
+            
             _performanceLogger.Write(stopwatch, "ClaimGenerator.Generate: Save claims.");
         }
 
-        protected IList<Claim> GetAllClaims()
+        protected IEnumerable<ICommonClaim> GetNewActiveClaims()
         {
-            var claims = new List<Claim>();
+            var securityClaims = new List<Claim>();
 
             foreach (var provider in _claimProviders.GetPlugins())
-                claims.AddRange(provider.GetAllClaims(_dslModel));
+                securityClaims.AddRange(provider.GetAllClaims(_dslModel));
 
-            return claims.Distinct().ToList();
+            securityClaims = securityClaims.Distinct().ToList();
+            ValidateClaims(securityClaims);
+
+            return _claimRepository.CreateList(securityClaims, (securityClaim, commonClaim) =>
+            {
+                commonClaim.ClaimResource = securityClaim.Resource;
+                commonClaim.ClaimRight = securityClaim.Right;
+            });
         }
 
-        protected void DiffClaims(IList<ICommonClaim> oldClaims, IList<Claim> newClaims, out IList<Claim> insert, out IList<ICommonClaim> update, out IList<ICommonClaim> delete)
+        protected void ValidateClaims(IList<Claim> newClaims)
         {
             var duplicates = newClaims.GroupBy(claim => claim.FullName.ToLower())
                 .Where(group => group.Count() > 1)
@@ -102,37 +115,32 @@ namespace Rhetos.Dom.DefaultConcepts
                     duplicates.Key,
                     duplicates.ElementAt(0).Resource, duplicates.ElementAt(0).Right,
                     duplicates.ElementAt(1).Resource, duplicates.ElementAt(1).Right));
+        }
 
-            var newClaimsIndex = newClaims.ToDictionary(c => c);
-            var oldClaimsIndex = oldClaims.ToDictionary(c => new Claim(c.ClaimResource, c.ClaimRight));
+        private void LogSummary(ref IEnumerable<ICommonClaim> toInsert, ref IEnumerable<ICommonClaim> toUpdate, ref IEnumerable<ICommonClaim> toDelete)
+        {
+            Log("Inserting claims", toInsert);
+            Log("Updating claims", toUpdate);
+            Log("Deleting claims", toDelete);
+        }
 
-            insert = newClaims.Where(nc => !oldClaimsIndex.ContainsKey(nc)).ToList();
-            delete = oldClaimsIndex.Where(oci => !newClaimsIndex.ContainsKey(oci.Key)).Select(oci => oci.Value).ToList();
+        private void Log(string title, IEnumerable<ICommonClaim> claims)
+        {
+            const int groupSize = 1000;
+            var groups = claims.Select((claim, index) => new { claim, index })
+                .GroupBy(ci => ci.index / groupSize, ci => ci.claim)
+                .OrderBy(g => g.Key).ToList();
 
-            var forUpdate = oldClaimsIndex.Select(oci =>
-                {
-                    Claim newClaim = null;
-                    newClaimsIndex.TryGetValue(oci.Key, out newClaim);
-                    return new { old = oci, newClaim };
-                })
-                .Where(pair => pair.newClaim != null && !pair.old.Key.Same(pair.newClaim))
-                .ToList();
-            foreach (var pair in forUpdate)
+            foreach (var group in groups)
+                _claimsLogger.Trace(() => title + " " + string.Join(", ", group.Select(claim => claim.ClaimResource + "." + claim.ClaimRight)) + ".");
+        }
+
+        internal class ClaimComparer : IComparer<ICommonClaim>
+        {
+            public int Compare(ICommonClaim x, ICommonClaim y)
             {
-                pair.old.Value.ClaimResource = pair.newClaim.Resource;
-                pair.old.Value.ClaimRight = pair.newClaim.Right;
+                return Claim.EquivalentComparer(x.ClaimResource, x.ClaimRight, y.ClaimResource, y.ClaimRight);
             }
-            update = forUpdate.Select(pair => pair.old.Value).ToList();
-
-            var insertRef = insert;
-            var updateRef = update;
-            var deleteRef = delete;
-            if (insert.Any())
-                _logger.Info(() => "Inserting claims: " + string.Join(", ", insertRef.Select(claim => claim.FullName)) + ".");
-            if (update.Any())
-                _logger.Info(() => "Updating claims case: " + string.Join(", ", updateRef.Select(claim => claim.ClaimResource + "." + claim.ClaimRight)) + ".");
-            if (delete.Any())
-                _logger.Info(() => "Deleting claims: " + string.Join(", ", deleteRef.Select(claim => claim.ClaimResource + "." + claim.ClaimRight)) + ".");
         }
     }
 }

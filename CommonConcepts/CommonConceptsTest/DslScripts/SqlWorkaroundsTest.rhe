@@ -104,8 +104,27 @@ Module TestSqlWorkarounds
     }
     
     SqlView AutoDependsOn1 "SELECT * FROM TestSqlWorkarounds.AutoDependsOn2";
+    SqlView AutoDependsOn1CI "SELECT * FROM TESTSQLWORKAROUNDS.AUTODEPENDSON2"; // Case insensitive
     SqlView AutoDependsOn2 "SELECT 'TestSqlWorkarounds.AutoDependsOn1'=1, * FROM /*TestSqlWorkarounds.AutoDependsOn1*/ --TestSqlWorkarounds.AutoDependsOn1
         [TestSqlWorkarounds].[AutoDependsOn3]"; // Circular reference is avoided because TestSqlWorkarounds.AutoDependsOn1 is commented out in AutoDependsOn2.
     SqlView AutoDependsOn3 "SELECT * FROM TestSqlWorkarounds.[AutoDependsOn4]";
     SqlView AutoDependsOn4 "SELECT a=1";
+	
+	Entity NoProperties;
+	SqlView DependsOnNoProperties "SELECT A = 1;" { SqlDependsOn TestSqlWorkarounds.NoProperties; }
+	
+	Entity TestIndex
+	{
+		ShortString A;
+		ShortString B;
+		SqlIndexMultiple 'A B' { Clustered; }
+	}
+}
+
+Module TestSqlWorkarounds2
+{
+	SqlView OtherModuleObject "SELECT A = 1;"
+	{
+		SqlDependsOn TestSqlWorkarounds;
+	}
 }

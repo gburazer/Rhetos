@@ -54,7 +54,7 @@ namespace Rhetos.Web
 
             object responseMessage;
             HttpStatusCode responseStatusCode;
-            if (error is UserException)
+            if (error is UserException || error is ClientException)
             {
                 responseStatusCode = HttpStatusCode.BadRequest;
                 responseMessage = error.Message;
@@ -62,7 +62,7 @@ namespace Rhetos.Web
             else
             {
                 responseStatusCode = HttpStatusCode.InternalServerError;
-                responseMessage = error.GetType().Name + ": " + error.Message;
+                responseMessage = "Internal server error occurred (" + error.GetType().Name + "). See RhetosServer.log for more information.";
             }
 
             fault = Message.CreateMessage(version, "", responseMessage,

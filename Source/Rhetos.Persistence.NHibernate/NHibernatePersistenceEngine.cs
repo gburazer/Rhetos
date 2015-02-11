@@ -31,7 +31,6 @@ using Rhetos.Logging;
 using Oracle.DataAccess.Client;
 using Oracle.DataAccess.Types;
 using NHibernate;
-using NHibernate.Cfg;
 using NHibernate.Tool.hbm2ddl;
 
 namespace Rhetos.Persistence.NHibernate
@@ -105,7 +104,7 @@ namespace Rhetos.Persistence.NHibernate
 
         void ForceLoadObjectModel()
         {
-            if (_domainObjectModel.ObjectModel == null)
+            if (_domainObjectModel.Assembly == null)
                 throw new FrameworkException("Cannot load domain object model.");
         }
 
@@ -119,9 +118,17 @@ namespace Rhetos.Persistence.NHibernate
                 var sw = Stopwatch.StartNew();
 
                 ForceLoadObjectModel(); // This is needed for "new Configuration()".
-                var configuration = new Configuration();
+                var configuration = new global::NHibernate.Cfg.Configuration();
                 configuration.SetProperty("connection.provider", "NHibernate.Connection.DriverConnectionProvider");
                 configuration.SetProperty("connection.connection_string", _connectionString);
+
+                // Set factory-level property:
+                configuration.SetProperty("command_timeout", SqlUtility.SqlCommandTimeout.ToString());
+                // Set system-level property:
+                // Note: Using NHibernate.Cfg.Environment.Properties does not allow setting properties becase the public property returns a copy of the dictionary.
+                var globalPropertiesField = typeof(global::NHibernate.Cfg.Environment).GetField("GlobalProperties", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                var globalProperties = (Dictionary<string, string>)globalPropertiesField.GetValue(null);
+                globalProperties.Add("command_timeout", SqlUtility.SqlCommandTimeout.ToString());
 
                 if (SqlUtility.DatabaseLanguage == "MsSql")
                 {
@@ -136,7 +143,7 @@ namespace Rhetos.Persistence.NHibernate
                 else
                     throw new FrameworkException(DatabaseLanguageError);
 
-                ResolveEventHandler resolveAssembly = (s, args) => _domainObjectModel.ObjectModel;
+                ResolveEventHandler resolveAssembly = (s, args) => _domainObjectModel.Assembly;
                 try
                 {
                     AppDomain.CurrentDomain.AssemblyResolve += resolveAssembly;

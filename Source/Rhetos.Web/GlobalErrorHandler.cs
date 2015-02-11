@@ -40,6 +40,8 @@ namespace Rhetos.Web
         public bool HandleError(Exception error)
         {
             if (error is UserException)
+                Logger.Trace(() => error.ToString());
+            else if (error is ClientException)
                 Logger.Info(() => error.ToString());
             else
                 Logger.Error(() => error.ToString());

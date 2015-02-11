@@ -55,7 +55,7 @@ namespace Rhetos.AspNetFormsAuth
 
         public IList<bool> GetAuthorizations(IUserInfo userInfo, IList<Claim> requiredClaims)
         {
-            IList<Guid> userAllRoles = GetUsersRoles(userInfo);
+            IList<Guid> userAllRoles = GetUsersRoles(userInfo.UserName);
             IList<PermissionValue> userPermissions = GetUsersPermissions(requiredClaims, userAllRoles);
             return GetUsersClaims(requiredClaims, userPermissions);
         }
@@ -66,31 +66,29 @@ namespace Rhetos.AspNetFormsAuth
             public bool IsAuthorized;
         }
 
-        private IList<Guid> GetUsersRoles(IUserInfo userInfo)
+        public IList<Guid> GetUsersRoles(string userName)
         {
-            string userName = userInfo.UserName;
             IList<Guid> userDirectRoles = _principalRolesRepository.Value.Query().Where(pr => pr.Principal.Name == userName).Select(pr => pr.Role.ID).ToList();
             if (userDirectRoles.Count() == 0)
-                ValidateUser(userInfo);
+                ValidateUser(userName);
             IList<Tuple<Guid, Guid>> roleInheritsRole = _roleRolesRepository.Value.Query().Select(rr => Tuple.Create(rr.Derived.ID, rr.InheritsFrom.ID)).ToList();
-            IList<Guid> userAllRoles = DirectedGraph.IncludeDependents(userDirectRoles, roleInheritsRole);
+            IList<Guid> userAllRoles = Graph.IncludeDependents(userDirectRoles, roleInheritsRole);
             return userAllRoles;
         }
 
-        private void ValidateUser(IUserInfo userInfo)
+        private void ValidateUser(string userName)
         {
-            Guid userId = _principalRepository.Value.Query().Where(p => p.Name == userInfo.UserName).Select(p => p.ID).SingleOrDefault();
+            Guid userId = _principalRepository.Value.Query().Where(p => p.Name == userName).Select(p => p.ID).SingleOrDefault();
             if (userId == default(Guid))
             {
-                _logger.Error("There is no principal with the given username '" + userInfo.UserName + "' in Common.Principal.");
-                throw new UserException("There is no principal with the given username.", "See server log for more info.");
+                _logger.Error("There is no principal with the given username '" + userName + "' in Common.Principal.");
+                throw new ClientException("There is no principal with the given username.");
             }
         }
 
         private IList<PermissionValue> GetUsersPermissions(IList<Claim> requiredClaims, IList<Guid> userAllRoles)
         {
             var claimNames = requiredClaims.Select(claim => claim.Resource + "." + claim.Right).ToList();
-            var claimIndex = new HashSet<Rhetos.Security.Claim>(requiredClaims);
 
             IList<PermissionValue> userPermissions = _permissionRepository.Value.Query()
                 .Where(permission =>
@@ -103,6 +101,7 @@ namespace Rhetos.AspNetFormsAuth
                         IsAuthorized = permission.IsAuthorized.Value
                     })
                 .ToList();
+
             return userPermissions;
         }
 

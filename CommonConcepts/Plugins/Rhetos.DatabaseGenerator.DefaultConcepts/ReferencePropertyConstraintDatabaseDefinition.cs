@@ -38,7 +38,7 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
     [Export(typeof(IConceptDatabaseDefinition))]
     [ExportMetadata(MefProvider.Implements, typeof(ReferencePropertyInfo))]
     [ExportMetadata(MefProvider.DependsOn, typeof(ReferencePropertyDatabaseDefinition))]
-    public class ReferencePropertyConstraintDatabaseDefinition : IConceptDatabaseDefinition
+    public class ReferencePropertyConstraintDatabaseDefinition : IConceptDatabaseDefinition, IConceptDatabaseDefinitionExtension
     {
         public static readonly SqlTag<ReferencePropertyInfo> ForeignKeyConstraintOptions = "FK options";
 
@@ -50,16 +50,22 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
                 info.Name));
         }
 
+        public static bool IsSupported(ReferencePropertyInfo info)
+        {
+            return ReferencePropertyDatabaseDefinition.IsSupported(info)
+                && ForeignKeyUtility.GetSchemaTableForForeignKey(info.Referenced) != null;
+        }
+
         public string CreateDatabaseStructure(IConceptInfo conceptInfo)
         {
             var info = (ReferencePropertyInfo)conceptInfo;
 
-            if (ReferencePropertyDatabaseDefinition.IsSupported(info))
+            if (IsSupported(info))
                 return Sql.Format("ReferencePropertyConstraintDatabaseDefinition_Create",
                     SqlUtility.Identifier(info.DataStructure.Module.Name) + "." + SqlUtility.Identifier(info.DataStructure.Name),
                     GetConstraintName(info),
                     info.GetColumnName(),
-                    info.Referenced.GetSchemaTableForForeignKey(),
+                    ForeignKeyUtility.GetSchemaTableForForeignKey(info.Referenced),
                     ForeignKeyConstraintOptions.Evaluate(info));
             return "";
         }
@@ -68,11 +74,24 @@ namespace Rhetos.DatabaseGenerator.DefaultConcepts
         {
             var info = (ReferencePropertyInfo)conceptInfo;
 
-            if (ReferencePropertyDatabaseDefinition.IsSupported(info))
+            if (IsSupported(info))
                 return Sql.Format("ReferencePropertyConstraintDatabaseDefinition_Remove",
                     SqlUtility.Identifier(info.DataStructure.Module.Name) + "." + SqlUtility.Identifier(info.DataStructure.Name),
                     GetConstraintName(info));
             return "";
+        }
+
+        public void ExtendDatabaseStructure(IConceptInfo conceptInfo, ICodeBuilder codeBuilder, out IEnumerable<Tuple<IConceptInfo, IConceptInfo>> createdDependencies)
+        {
+            var info = (ReferencePropertyInfo)conceptInfo;
+
+            var dependencies = new List<Tuple<IConceptInfo, IConceptInfo>>();
+
+            if (IsSupported(info))
+                dependencies.AddRange(ForeignKeyUtility.GetAdditionalForeignKeyDependencies(info.Referenced)
+                    .Select(dep => Tuple.Create<IConceptInfo, IConceptInfo>(dep, info)));
+
+            createdDependencies = dependencies;
         }
     }
 }

@@ -20,7 +20,6 @@
 using Autofac;
 using Autofac.Configuration;
 using Autofac.Integration.Wcf;
-using Rhetos.Dom;
 using Rhetos.Logging;
 using Rhetos.Utilities;
 using System;
@@ -40,6 +39,8 @@ namespace Rhetos
         {
             var stopwatch = Stopwatch.StartNew();
 
+            Paths.InitializeRhetosServer();
+
             var builder = new ContainerBuilder();
             builder.RegisterModule(new ConfigurationSettingsReader("autofacComponents"));
             AutofacServiceHostFactory.Container = builder.Build();
@@ -47,7 +48,6 @@ namespace Rhetos
             _logger = AutofacServiceHostFactory.Container.Resolve<ILogProvider>().GetLogger("Global");
             _performanceLogger = AutofacServiceHostFactory.Container.Resolve<ILogProvider>().GetLogger("Performance");
             _pluginServices = AutofacServiceHostFactory.Container.Resolve<IEnumerable<IService>>();
-            XmlUtility.Dom = AutofacServiceHostFactory.Container.Resolve<IDomainObjectModel>().ObjectModel;
 
             _performanceLogger.Write(stopwatch, "Autofac initialized.");
 

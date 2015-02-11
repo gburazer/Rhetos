@@ -17,11 +17,10 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+using Rhetos.Deployment;
 using System;
 using System.IO;
-using System.Text;
 using System.Threading;
-using Rhetos.Deployment;
 
 namespace ExtractPackages
 {
@@ -47,10 +46,11 @@ namespace ExtractPackages
             catch (Exception ex)
             {
                 Console.WriteLine();
-                WriteError(ex.Message);
+                DeploymentUtility.WriteError(ex.Message);
                 Console.WriteLine("Details:");
                 Console.WriteLine(ex);
-                Thread.Sleep(3000);
+                if (Environment.UserInteractive) 
+                    Thread.Sleep(3000);
                 return 1;
             }
         }
@@ -68,17 +68,6 @@ namespace ExtractPackages
                 PackageSet = @"..\ExtractPackages.txt",
                 DeploymentFolder = @"..\"
             };
-        }
-
-        private static void WriteError(string msg)
-        {
-            var oldFg = Console.ForegroundColor;
-            var oldBg = Console.BackgroundColor;
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.BackgroundColor = ConsoleColor.DarkRed;
-            Console.WriteLine(msg);
-            Console.ForegroundColor = oldFg;
-            Console.BackgroundColor = oldBg;
         }
     }
 }

@@ -25,11 +25,20 @@ using System.Reflection;
 using System.Text;
 using System.Runtime.Serialization;
 using System.Xml;
+using Rhetos.Dom;
 
 namespace Rhetos.Utilities
 {
     internal class GenericDataContractResolver : DataContractResolver
     {
+        /// <param name="domainObjectModel">The parameter may be null is the object model is not yet generated.</param>
+        public GenericDataContractResolver(IDomainObjectModel domainObjectModel)
+        {
+            _domainObjectModel = domainObjectModel;
+        }
+
+        private IDomainObjectModel _domainObjectModel;
+
         private static string Decode(string value)
         {
             StringBuilder sb = new StringBuilder();
@@ -65,10 +74,10 @@ namespace Rhetos.Utilities
             if (type != null)
                 return type;
 
-            if (XmlUtility.Dom != null)
+            if (_domainObjectModel != null)
             {
-                // Without explicit use of XmlUtility.Dom, there is a possibility that ServerDom.dll will not get in AppDomain.CurrentDomain.GetAssemblies(), so ResolveName will fail to resolve the type. Unexpectedly, the problem occured stochastically when the server was under heavy load.
-                type = XmlUtility.Dom.GetType(decodedTypeName);
+                // Without explicit use of IDomainObjectModel, there is a possibility that ServerDom.dll will not get in AppDomain.CurrentDomain.GetAssemblies(), so ResolveName will fail to resolve the type. Unexpectedly, the problem occured stochastically when the server was under heavy load.
+                type = _domainObjectModel.Assembly.GetType(decodedTypeName);
                 if (type != null)
                     return type;
             }
@@ -120,33 +129,6 @@ namespace Rhetos.Utilities
 
             return null;
         }
-
-//        private Assembly _objectModelAssembly;
-//
-//        private Assembly ObjectModelAssembly
-//        {
-//            get
-//            {
-//                if (null == _objectModelAssembly)
-//                    _objectModelAssembly = FindObjectModelAssembly();
-//
-//                return _objectModelAssembly;
-//            }
-//        }
-//
-//        private static Assembly FindObjectModelAssembly()
-//        {
-//            var asms = (from asm in AppDomain.CurrentDomain.GetAssemblies()
-//                        where asm.FullName.StartsWith("Rhetos.ObjectModel,")
-//                        select asm).ToList();
-//
-//            if (asms.Count > 1)
-//                throw new FrameworkException("There are multiple assemblies named Rhetos.ObjectModel.");
-//            if (asms.Count == 0)
-//                throw new FrameworkException("Rhetos.ObjectModel assembly not found.");
-//
-//            return asms[0];
-//        }
 
         public override bool TryResolveType(Type type, Type declaredType, DataContractResolver knownTypeResolver, out XmlDictionaryString typeName, out XmlDictionaryString typeNamespace)
         {

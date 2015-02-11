@@ -17,19 +17,13 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Configuration;
-using System.Diagnostics;
-using System.Diagnostics.Contracts;
-using System.Linq;
-using Rhetos.Utilities;
-using Rhetos.Dom;
 using Rhetos.Extensibility;
 using Rhetos.Logging;
-using Rhetos.Persistence;
 using Rhetos.Processing;
-using Autofac.Features.Indexed;
+using Rhetos.Utilities;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 
 namespace Rhetos.Security
 {
@@ -41,18 +35,20 @@ namespace Rhetos.Security
         private readonly ILogger _performanceLogger;
         private readonly bool _allowBuiltinAdminOverride;
         private readonly IAuthorizationProvider _authorizationProvider;
+        private readonly WindowsSecurity _windowsSecurity;
 
         public AuthorizationManager(
             IPluginsContainer<IClaimProvider> claimProviders,
             IUserInfo userInfo,
             ILogProvider logProvider,
-            IAuthorizationProvider authorizationProvider)
+            IAuthorizationProvider authorizationProvider,
+            WindowsSecurity windowsSecurity)
         {
             _userInfo = userInfo;
             _claimProviders = claimProviders;
             _authorizationProvider = authorizationProvider;
-
-            _logger = logProvider.GetLogger("AuthorizationManager");
+            _windowsSecurity = windowsSecurity;
+            _logger = logProvider.GetLogger(GetType().Name);
             _performanceLogger = logProvider.GetLogger("Performance");
 
             _allowBuiltinAdminOverride = FromConfigAllowBuiltinAdminOverride();
@@ -60,10 +56,11 @@ namespace Rhetos.Security
 
         private static bool FromConfigAllowBuiltinAdminOverride()
         {
-            if (ConfigurationManager.AppSettings["BuiltinAdminOverride"] != null)
+            var setting = ConfigUtility.GetAppSetting("BuiltinAdminOverride");
+            if (setting != null)
             {
                 bool allow;
-                if (bool.TryParse(ConfigurationManager.AppSettings["BuiltinAdminOverride"], out allow))
+                if (bool.TryParse(setting, out allow))
                     return allow;
                 
                 throw new FrameworkException("Invalid setting of BuiltinAdminOverride in configuration file. Allowed values are True and False.");
@@ -75,7 +72,9 @@ namespace Rhetos.Security
         {
             var sw = Stopwatch.StartNew();
 
-            if (_allowBuiltinAdminOverride && _userInfo is WcfWindowsUserInfo && ((WcfWindowsUserInfo)_userInfo).IsBuiltInAdministrator())
+            if (_allowBuiltinAdminOverride
+                && _userInfo is IWindowsUserInfo
+                && _windowsSecurity.IsBuiltInAdministrator((IWindowsUserInfo)_userInfo))
             {
                 _logger.Trace(() => string.Format("User {0} has builtin administrator privileges.", _userInfo.UserName));
                 return Enumerable.Repeat(true, requiredClaims.Count()).ToArray();

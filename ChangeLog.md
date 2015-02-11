@@ -1,3 +1,176 @@
+0.9.24 (2015-02-04)
+-------------------
+
+Breaking changes:
+
+* Using new version of Autofac (v3.5.2). Since Autofac dlls are signed, all plugin packages that use Autofac must be rebuilt with the new version.
+
+New features:
+
+* New concept: **LockExcept**, for locking entity without locking the specified properties.
+
+Internal improvements:
+
+* `DeployPackages.exe` uses a logger instead of `Console.WriteLine()` directly. The logger can be configured in `DeployPackages.exe.config`.
+* Deployment performance improvements.
+
+0.9.23 (2015-01-26)
+-------------------
+
+Breaking changes:
+
+* Internal server error information is removed from server responses (a configuration option will be added in future).
+
+New features:
+
+* New row permissions concepts: **Allow** and **Deny**, for combined read and write rules.
+* Simplified row permission rules format: a single function that returns the expression.
+
+Internal improvements:
+
+* Bugfix: Deploying AspNetFormsAuth after SimpleWindowsAuth fails on IX_Permission_Role_Claim.
+* Bugfix: User authorization fails when using IProcessingEngine (executing server commands) in unit tests and in LinqPad scripts.
+
+0.9.22 (2015-01-13)
+-------------------
+
+Breaking changes:
+
+* **Detail** reference is **SystemRequired**.
+
+New features:
+
+* Added [Forgot my password](https://github.com/Rhetos/Rhetos/tree/master/AspNetFormsAuth#forgot-password) feature to *AspNetFormsAuth*. Sending the password reset token to the user (by SMS or email, e.g.) is to be implemented as a seperate plugin (for example see [SimpleSPRTEmail](https://github.com/Rhetos/SimpleSPRTEmail)).
+* New RowPermissions concepts: **AllowWrite** and **DenyWrite**.
+* New RowPermissions concept: **InheritFromBase**.
+* New RowPermissions concept: **AutoInheritRowPermissions**.
+
+Internal improvements:
+
+* Minor performance optimizations for some macro concepts.
+* Bugfix: InitializationConcept was not registered as a regular concept.
+
+0.9.21 (2014-12-18)
+-------------------
+
+Internal improvements:
+
+* Bugfix: Filter by ID cannot be combined with queryable filters. Some queries may throw NHibernate error, such as using row permissions on filters browse data structure.
+* Bugfix: **SqlIndexMultiple** sometimes did not use the given ordering of properties.
+* Bugfix: *SqlCommandTimeout* config parameter does not apply to NHibernate queries.
+* Bugfix: **AutoCode** fails with unique index constraint error on concurrent inserts.
+* Bugfix: Duplicate unique value error in *IX_Permission_Principal_Claim* on deployment, when migrating roles from *AspNetFormsAuth* to *SimpleWindowsAuth* package.
+* New concept: **Clustered**, for SQL indexes.
+* Minor performance optimizations.
+
+0.9.20 (2014-12-09)
+-------------------
+
+Breaking changes:
+
+* Filter `Common.RowPermissionsAllowedItems` renamed to `Common.RowPermissionsReadItems`.
+
+New features:
+
+* New concepts: RowPermissions **AllowRead** and **DenyRead**, helpers for row permissions that allows combining multiple rules and inheriting rules from one entity to another.
+
+Internal improvements:
+
+* Improved performance of *DeployPackages.exe* (mostly DSL parser).
+* Automatically updating persisted **KeepSynchronized** data on first deployment. The update may be avoided for a specific computation by setting `Context='NORECOMPUTE'` in *Common.KeepSynchronizedMetadata* table.
+* Bugfix: **SqlDependsOn** to an entity without properties does not work.
+* Bugfix: *ArgumentNullException* thrown on some client request.
+* Bugfixes: Row permissions not supported on **Browse**. Row permissions not used on empty filter requests.
+* New interface *IConceptMacro*, for implementing macro concepts with better performance.
+* Added Query function to *GenericRepository*, for simplied use in application code.
+
+0.9.19 (2014-11-12)
+-------------------
+
+New features:
+
+* New concept: **Polymorphic**. It allows multiple entities to implement same interface. Polymorphic data structure is readable, it returns the union of all implementations. A reference to a polymorphic entity will validate foreign key constraint on all data changes.
+* New concept: **RowPermissions** for programmable constraints on records that a client is allowed to read. Can be used explicitly by filter parameter: *Common.RowPermissionsAllowedItems*.
+* New concepts: **ApplyFilterOnClientRead** and **ApplyOnClientRead**, for filters that are automatically added to each client request. 
+ 
+Internal improvements:
+
+* New action for custom log entries: *Common.AddToLog*.
+* Bugfix: Value-type filter without a given parameter value would fail even if the value is not used in the filter.
+* Using *ConceptMetadata* for sharing concept implementation info (SQL column name and type, e.g.).
+
+0.9.18 (2014-10-01)
+-------------------
+
+New features:
+
+* **AutoCode** for **Integer** properties.
+* **AutoCode** allows client to define minimal number length by multiple "+" at the end of the format string.
+* New persistence control mode: **ComputeForNewItems**.
+* **History** allows *ActiveSince* in future. "Current" entry is now simply the latest one (may have future date). 
+* Enabled use of **UseExecutionContext** on **ComposableFilterBy**.
+
+Internal improvements:
+
+* Added friendly error messages for authentication and permission problems while running Rhetos under IISExpress or when server process lacks MS SQL permissions.
+* New exception type: *ClientException*, to separate client software errors, such as invalid request format, from denied user actions (UserException).       
+* Async logging for trace log.
+* Bugfix: Allow multiple **AutoCode** on same Entity.
+* Bugfix: **DenyUserEdit** with **CreationTime** on same property fails on save.
+* Bugfix: Reference to an **SqlQueryable** causes SQL error on deployment.
+* Bugfix: *ApplyPackages.bat* fails on space in package's folder name.
+* Bugfix: **AutodetectSqlDependencies** and other SqlDependsOn* concepts should not be case sensitive.
+
+0.9.17 (2014-05-21)
+-------------------
+
+Breaking changes:
+
+* Testing API: RhetosTestContainer.InitializeRhetosServerRootPath function removed, use the constructor argument instead.
+
+New features:
+
+* New concepts: **KeyProperty** and **KeyProperties**, for **ComputedFrom** to control when to update an item or to delete old item and insert a new one. Backward compatible with previous ComputedFrom behavior where key property is assumed to be "ID".
+* AspNetFormsAuth: Token expiration parameter for *GeneratePasswordResetToken*.
+* `/Debug` option for DeployPackages.exe to generate ServerDom.dll without optimizations.
+
+Internal improvements:
+
+* Bugfix: Reading *top n* or *count* from Browse data structure loads all rows from database.
+* Bugfix: TargetInvocationException instead of UserException was reported to the client.
+* More minor bugfixes and error handling improvements.
+
+0.9.16 (2014-04-18)
+-------------------
+
+Internal improvements:
+
+* New core DSL concept **InitializationConcept**, for singleton DSL implementation plugins.
+* Bugfix: LinqPad script cannot detect Rhetos server's folder it the folder's name is not "Rhetos".
+
+0.9.15 (2014-04-07)
+-------------------
+
+New features:
+
+* Implemented `GenericRepository` class, a helper for server-side type-safe access to entity's repository (using interface the entity implements) without referencing the generated business layer object model.
+* *Generic filter* is extended to allow multiple predefined filters (along with property filters).
+* New server command: *ReadCommand* is a replacement for *QueryDataSourceCommand*.
+	* Improvements: ordering by multiple properties, more paging control with Top and Skip, reading records with paging without getting total count (this was a performance issue) and reading record count without reading records.
+	* *QueryDataSourceCommand* is obsolete, but still available for backward compatibility.
+
+Internal improvements:
+
+* Deactivating obsolete claims and permissions, instead of deleting them.
+* Unit tests and LinqPad scripts now use full Rhetos server context (RhetosTestContainer class). This allows using reports, authentication manager and other server components.
+* Added GenericRepositories in ExecutionContext.
+* AspNetFormsAuth: Implemented GeneratePasswordResetToken and ResetPassword web methods. Automatic user log in after ResetPassword.
+* Minor improvement in DeployPackages.exe performance (cached plugins scanning).
+* Bugfix: AutocodeForEach on a Reference with short syntax causes error "Group property type 'SimpleReferencePropertyInfo' is not supported".
+* Bugfix: NHibernate.Cfg.Configuration.LinqToHqlGeneratorsRegistry cannot be used in plugins.
+* Bugfix: Missing dll dependencies for AspNetFormsAuth.
+* Bugfix: Deploying AspNetFormsAuth to an empty database causes SQL connection timeout.
+
 0.9.14 (2014-02-26)
 -------------------
 
@@ -51,7 +224,6 @@ Internal improvements:
 * Bugfix: FK_AppliedConceptDependsOn_DependsOn error on DeployPackages.
 * NHibernate updated to version 3.3.3 SP1 (HqlTreeBuilder.Constant IList<X> issue).
 * Improved ORM DateTime precision from seconds to milliseconds.
-
 
 0.9.11 (2013-09-25)
 -------------------

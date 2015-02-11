@@ -29,15 +29,8 @@ namespace Rhetos.Dom.DefaultConcepts
     /// patametar type FilterAll (the filter is expected to return all records from the repository)
     /// and patametar type IEnumerable(Guid) (the filter is expected to return the records with given primary keys).
     /// </summary>
-    public interface IFilterRepository<in TParameters, out TResult>
+    public interface IFilterRepository<in TParameters, out TResult> : IRepository
     {
         TResult[] Filter(TParameters parameters);
-    }
-
-    /// <summary>
-    /// IFilterRepository implementation of this filter should return all records from the repository.
-    /// </summary>
-    public class FilterAll
-    {
     }
 }

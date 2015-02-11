@@ -44,31 +44,40 @@ namespace Rhetos.Dom.DefaultConcepts
 
         private static string CheckLockedPropertySnippet(LockPropertyInfo info)
         {
-            var propName = info.Source.Name;
+            string propertyName = info.Source.Name;
             if (info.Source is ReferencePropertyInfo)
-            {
-                propName += "ID";
-            }
-            string propertyChanged = @"i." + propName + "==null && j." + propName + "!=null || " +
-                                     @"i." + propName + "!=null && j." + propName + "==null || " +
-                                     @"i." + propName + "!=null && j." + propName + "!=null && !i." + propName + ".Equals(j." + propName + ")";
+                propertyName += "ID";
+
             return string.Format(
 @"            if (updated.Length > 0 || deleted.Length > 0)
             {{
-                {0}[] changedItems = updated.Zip(updatedNew, (i, j) => (" + propertyChanged + @")?i:null).Where(x => x != null).ToArray();
-                var lockedItems = _domRepository.{0}.Filter(changedItems.AsQueryable(), new {1}());
-                if (lockedItems.Count() > 0)
-                    throw new Rhetos.UserException({2}, ""DataStructure:{0},ID:"" + lockedItems.First().ID.ToString() + "",Property:{3}"");
+                {0}[] changedItems = updated.Zip(updatedNew, (i, j) => ({4})
+                    ? i : null).Where(x => x != null).ToArray();
 
-                // Workaround to restore NH proxies if NHSession.Clear() is called inside filter.
-                for (int i=0; i<updated.Length; i++) updated[i] = _executionContext.NHibernateSession.Load<{0}>(updated[i].ID);
-                for (int i=0; i<deleted.Length; i++) deleted[i] = _executionContext.NHibernateSession.Load<{0}>(deleted[i].ID);
+                if (changedItems != null && changedItems.Length > 0)
+                {{
+                    var lockedItems = _domRepository.{0}.Filter(changedItems.AsQueryable(), new {1}());
+                    if (lockedItems.Count() > 0)
+                        throw new Rhetos.UserException({2}, ""DataStructure:{0},ID:"" + lockedItems.First().ID.ToString() + "",Property:{3}"");
+
+                    // Workaround to restore NH proxies if NHSession.Clear() is called inside filter.
+                    for (int i=0; i<updated.Length; i++) updated[i] = _executionContext.NHibernateSession.Load<{0}>(updated[i].ID);
+                    for (int i=0; i<deleted.Length; i++) deleted[i] = _executionContext.NHibernateSession.Load<{0}>(deleted[i].ID);
+                }}
             }}
 ",
                 info.Source.DataStructure.GetKeyProperties(),
                 info.FilterType,
                 CsUtility.QuotedString(info.Title),
-                propName);
+                propertyName,
+                CompareValuePropertySnippet(propertyName));
+        }
+
+        private static string CompareValuePropertySnippet(string propertyName)
+        {
+            return string.Format(
+                "i.{0} == null && j.{0} != null || i.{0} != null && !i.{0}.Equals(j.{0})",
+                propertyName);
         }
     }
 }

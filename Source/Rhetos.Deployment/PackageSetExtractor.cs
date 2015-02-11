@@ -120,7 +120,7 @@ namespace Rhetos.Deployment
                     packagesByKey.GetValue(dependency.Identifier, "Package " + pckgInfo.Package.Identifier + " has depedency on nonexistent package {0} in " + PackageInfoFileName + "."),
                     pckgInfo)).ToList();
     
-            DirectedGraph.TopologicalSort(pckgInfos, packageDependencies);
+            Graph.TopologicalSort(pckgInfos, packageDependencies);
 
             return pckgInfos;
         }
@@ -196,7 +196,9 @@ namespace Rhetos.Deployment
                     //if (tries == maxTries)
                         //Console.Write(actionName + " failed");
                     //Console.Write(" ... retrying");
-                    System.Threading.Thread.Sleep(500);
+
+                    if (Environment.UserInteractive)
+                        System.Threading.Thread.Sleep(500);
                     continue;
                 }
             }

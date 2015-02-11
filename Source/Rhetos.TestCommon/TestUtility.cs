@@ -33,6 +33,12 @@ namespace Rhetos.TestCommon
     {
         public static Exception ShouldFail(Action action, params string[] expectedErrorContent)
         {
+            return ShouldFail<Exception>(action, expectedErrorContent);
+        }
+
+        public static Exception ShouldFail<TExpectedException>(Action action, params string[] expectedErrorContent)
+            where TExpectedException : Exception
+        {
             Exception exception = null;
             string message = null;
             try
@@ -50,15 +56,23 @@ namespace Rhetos.TestCommon
 
                 message = ex.GetType().Name + ": " + message;
             }
+
             Assert.IsNotNull(exception, "Expected exception did not happen.");
-            AssertContains(message, expectedErrorContent, "Exception message text is incorrect.");
+
+            if (!(exception is TExpectedException))
+                Assert.Fail(string.Format("Unexpected exception type: {0} instead of a {1}.",
+                    exception.GetType().Name,
+                    typeof(TExpectedException).Name));
+
+            AssertContains(message, expectedErrorContent, "Exception message is incorrect: " + message, exception.ToString());
+
             return exception;
         }
 
         /// <summary>
         /// Case-insensitive comparison.
         /// </summary>
-        public static void AssertContains(string text, string[] patterns, string message = null)
+        public static void AssertContains(string text, string[] patterns, string message = null, string errorContext = null)
         {
             if (patterns.Any(string.IsNullOrEmpty))
                 throw new ArgumentException("Given list of patterns contains an empty string.");
@@ -74,6 +88,7 @@ namespace Rhetos.TestCommon
                 else
                 {
                     Console.WriteLine(" Not found.");
+                    Console.WriteLine(errorContext);
                     Assert.Fail("Text should contain pattern '" + pattern + "'. " + message ?? "");
                 }
             }

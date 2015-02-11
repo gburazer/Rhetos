@@ -17,18 +17,14 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Globalization;
-using System.ComponentModel.Composition;
 using Microsoft.CSharp.RuntimeBinder;
-using Rhetos.Utilities;
 using Rhetos.Compiler;
-using Rhetos.Dsl.DefaultConcepts;
 using Rhetos.Dsl;
+using Rhetos.Dsl.DefaultConcepts;
 using Rhetos.Extensibility;
+using System.Collections.Generic;
+using System.ComponentModel.Composition;
+using System.Linq;
 
 namespace Rhetos.Dom.DefaultConcepts
 {
@@ -40,17 +36,6 @@ namespace Rhetos.Dom.DefaultConcepts
         public static readonly CsTag<ModuleInfo> NamespaceMembersTag = "Body";
         public static readonly CsTag<ModuleInfo> RepositoryMembersTag = "RepositoryMembers";
         public static readonly CsTag<ModuleInfo> HelperNamespaceMembersTag = "HelperNamespaceMembers";
-
-        private const string StandardNamespacesSnippet =
-@"using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using NHibernate.Linq;
-    using System.Linq.Expressions;
-    using System.Runtime.Serialization;
-    using Rhetos.Dom.DefaultConcepts;
-    using Rhetos.Utilities;";
 
         private static string GenerateNamespaceSnippet(ModuleInfo info)
         {
@@ -86,7 +71,7 @@ namespace {0}._Helper
     {5}
 }}",
                 info.Name,
-                StandardNamespacesSnippet,
+                DomInitializationCodeGenerator.StandardNamespacesSnippet,
                 UsingTag.Evaluate(info),
                 NamespaceMembersTag.Evaluate(info),
                 RepositoryMembersTag.Evaluate(info),
@@ -105,22 +90,7 @@ namespace {0}._Helper
 
         public void GenerateCode(IConceptInfo conceptInfo, ICodeBuilder codeBuilder)
         {
-            ModuleInfo info = (ModuleInfo)conceptInfo;
-
-            if (!CommonClassesCreated)
-            {
-                codeBuilder.InsertCode(GenerateCommonClassesSnippet());
-                // Types used in the preceding code snippet:
-                codeBuilder.AddReferencesFromDependency(typeof(Autofac.Module)); // Includes a reference to Autofac.dll.
-                codeBuilder.AddReferencesFromDependency(typeof(NHibernate.ISession));
-                codeBuilder.AddReferencesFromDependency(typeof(Rhetos.Utilities.IUserInfo));
-                codeBuilder.AddReferencesFromDependency(typeof(Rhetos.Utilities.ISqlExecuter));
-                codeBuilder.AddReferencesFromDependency(typeof(Rhetos.Security.IAuthorizationManager));
-                codeBuilder.AddReferencesFromDependency(typeof(Rhetos.Utilities.ResourcesFolder));
-                codeBuilder.AddReferencesFromDependency(typeof(System.ComponentModel.Composition.ExportAttribute));
-
-                CommonClassesCreated = true;
-            }
+            var info = (ModuleInfo)conceptInfo;
 
             codeBuilder.InsertCode(GenerateNamespaceSnippet(info));
             // Default .NET framework asseblies:
@@ -142,98 +112,19 @@ namespace {0}._Helper
             codeBuilder.InsertCode(ModuleRepositoryInCommonRepositorySnippet(info), CommonDomRepositoryMembersTag);
         }
 
-        public static bool CommonClassesCreated = false;
+        // TODO: Move this tags to DomInitializationCodeGenerator (breaking backward compatibility for other DSL packages)
         public const string CommonUsingTag = "/*CommonUsing*/";
         public const string CommonDomRepositoryMembersTag = "/*CommonDomRepositoryMembers*/";
         public const string CommonAutofacConfigurationMembersTag = "/*CommonAutofacConfigurationMembers*/";
         public const string ExecutionContextMemberTag = "/*ExecutionContextMember*/";
         public const string ExecutionContextConstructorArgumentTag = "/*ExecutionContextConstructorArgument*/";
         public const string ExecutionContextConstructorAssignmentTag = "/*ExecutionContextConstructorAssignment*/";
+        public const string RegisteredInterfaceImplementationNameTag = "/*RegisteredInterfaceImplementationName*/";
+        public const string ApplyFiltersOnClientReadTag = "/*ApplyFiltersOnClientRead*/";
+        public const string CommonNamespaceMembersTag = "/*CommonNamespaceMembers*/";
+        public const string CommonInfrastructureMembersTag = "/*CommonInfrastructureMembers*/";
+        public const string NHibernateConfigurationExtensionTag = "/*NHibernateConfigurationExtension*/";
+        public const string LinqToHqlGeneratorsRegistryTag = "/*LinqToHqlGeneratorsRegistry*/"; // Instead of calling Configuration.LinqToHqlGeneratorsRegistry() function, add the registry code using ModuleCodeGenerator.LinqToHqlGeneratorsRegistryTag. NHibernate supports only one LinqToHqlGeneratorsRegistry, so it cannot be registered in more than one plugin.
 
-        private static string GenerateCommonClassesSnippet()
-        {
-            return string.Format(
-@"namespace Common
-{{
-    {0}
-
-    using Autofac;
-    {1}
-
-    public class DomRepository
-    {{
-        private readonly ExecutionContext _executionContext;
-
-        public DomRepository(ExecutionContext executionContext)
-        {{
-            _executionContext = executionContext;
-        }}
-
-        {2}
-    }}
-
-    public class ExecutionContext
-    {{
-        protected Lazy<Rhetos.Persistence.IPersistenceTransaction> _persistenceTransaction;
-        public NHibernate.ISession NHibernateSession {{ get {{ return _persistenceTransaction.Value.NHibernateSession; }} }}
-
-        public Rhetos.Persistence.IPersistenceTransaction PersistenceTransaction {{ get {{ return _persistenceTransaction.Value; }} }}
-
-        protected Lazy<Rhetos.Utilities.IUserInfo> _userInfo;
-        public Rhetos.Utilities.IUserInfo UserInfo {{ get {{ return _userInfo.Value; }} }}
-
-        protected Lazy<Rhetos.Utilities.ISqlExecuter> _sqlExecuter;
-        public Rhetos.Utilities.ISqlExecuter SqlExecuter {{ get {{ return _sqlExecuter.Value; }} }}
-
-        protected Lazy<Rhetos.Security.IAuthorizationManager> _authorizationManager;
-        public Rhetos.Security.IAuthorizationManager AuthorizationManager {{ get {{ return _authorizationManager.Value; }} }}
-
-        protected Lazy<Rhetos.Utilities.ResourcesFolder> _resourcesFolder;
-        public Rhetos.Utilities.ResourcesFolder ResourcesFolder {{ get {{ return _resourcesFolder.Value; }} }}
-        {4}
-
-        // This constructor is used for automatic parameter injection with autofac.
-        public ExecutionContext(
-            Lazy<Rhetos.Persistence.IPersistenceTransaction> persistenceTransaction,
-            Lazy<Rhetos.Utilities.IUserInfo> userInfo,
-            Lazy<Rhetos.Utilities.ISqlExecuter> sqlExecuter,
-            Lazy<Rhetos.Security.IAuthorizationManager> authorizationManager,
-            Lazy<Rhetos.Utilities.ResourcesFolder> resourcesFolder{5})
-        {{
-            _persistenceTransaction = persistenceTransaction;
-            _userInfo = userInfo;
-            _sqlExecuter = sqlExecuter;
-            _authorizationManager = authorizationManager;
-            _resourcesFolder = resourcesFolder;
-            {6}
-        }}
-
-        // This constructor is used for manual context creation (unit testing)
-        public ExecutionContext()
-        {{
-        }}
-    }}
-
-    [System.ComponentModel.Composition.Export(typeof(Autofac.Module))]
-    public class AutofacConfiguration : Autofac.Module
-    {{
-        protected override void Load(Autofac.ContainerBuilder builder)
-        {{
-            builder.RegisterType<DomRepository>().InstancePerLifetimeScope();
-            builder.RegisterType<ExecutionContext>().InstancePerLifetimeScope();
-            {3}
-
-            base.Load(builder);
-        }}
-    }}
-}}",
-            StandardNamespacesSnippet,
-            CommonUsingTag,
-            CommonDomRepositoryMembersTag,
-            CommonAutofacConfigurationMembersTag,
-            ExecutionContextMemberTag,
-            ExecutionContextConstructorArgumentTag,
-            ExecutionContextConstructorAssignmentTag);
-        }
     }
 }

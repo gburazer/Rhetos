@@ -23,6 +23,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Rhetos.TestCommon;
+using Rhetos.Utilities;
+using Rhetos.Configuration.Autofac;
+using Rhetos.Dom.DefaultConcepts;
 
 namespace CommonConcepts.Test
 {
@@ -37,10 +40,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void DeleteLockedData()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s1 = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s1" };
                 var s2 = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s2" };
@@ -62,10 +65,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void UpdateLockedData()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s1 = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s1" };
                 var s2 = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s2" };
@@ -91,10 +94,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void UpdateTryRemoveLock()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s3Lock = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s3_lock" };
                 repository.TestLockItems.Simple.Insert(new[] { s3Lock });
@@ -111,10 +114,10 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void UpdatePersistentObject()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 {
                     var s3Lock = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s3_lock" };
@@ -135,17 +138,17 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void DeleteModifiedPersistentObject()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 {
                     var s3Lock = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "s3_lock" };
                     repository.TestLockItems.Simple.Insert(new[] { s3Lock });
 
                     AssertData("s3_lock", repository);
-                    executionContext.NHibernateSession.Clear();
+                    container.Resolve<Common.ExecutionContext>().NHibernateSession.Clear();
                     AssertData("s3_lock", repository);
                 }
 
@@ -156,7 +159,7 @@ namespace CommonConcepts.Test
                         "Name contains lock mark");
 
                     AssertData("s3_lock", repository);
-                    executionContext.NHibernateSession.Clear();
+                    container.Resolve<Common.ExecutionContext>().NHibernateSession.Clear();
                     AssertData("s3_lock", repository);
                 }
             }
@@ -165,40 +168,40 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void Spike_EvictContains()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
-                var repository = new Common.DomRepository(executionContext);
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;" });
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s = new TestLockItems.Simple { ID = Guid.NewGuid(), Name = "abc" };
                 repository.TestLockItems.Simple.Insert(new[] { s });
                 AssertData("abc", repository);
-                Assert.IsFalse(executionContext.NHibernateSession.Contains(s));
+                Assert.IsFalse(container.Resolve<Common.ExecutionContext>().NHibernateSession.Contains(s));
 
                 var s2 = repository.TestLockItems.Simple.All().Single();
-                Assert.IsTrue(executionContext.NHibernateSession.Contains(s2));
+                Assert.IsTrue(container.Resolve<Common.ExecutionContext>().NHibernateSession.Contains(s2));
 
-                executionContext.NHibernateSession.Evict(s2);
-                Assert.IsFalse(executionContext.NHibernateSession.Contains(s2));
+                container.Resolve<Common.ExecutionContext>().NHibernateSession.Evict(s2);
+                Assert.IsFalse(container.Resolve<Common.ExecutionContext>().NHibernateSession.Contains(s2));
             }
         }
 
         [TestMethod]
         public void Spike_EvictKeepsChangedData()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;",
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;",
                     "INSERT INTO TestLockItems.Simple (Name) VALUES ('abc locked')" });
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s1 = repository.TestLockItems.Simple.All().Single();
                 Assert.AreEqual("abc locked", s1.Name);
                 s1.Name = "def";
 
-                executionContext.NHibernateSession.Clear(); // Same with Evict(s2)
-                executionContext.NHibernateSession.Flush();
-                executionContext.NHibernateSession.Clear();
+                container.Resolve<Common.ExecutionContext>().NHibernateSession.Clear(); // Same with Evict(s2)
+                container.Resolve<Common.ExecutionContext>().NHibernateSession.Flush();
+                container.Resolve<Common.ExecutionContext>().NHibernateSession.Clear();
 
                 Assert.AreEqual("def", s1.Name);
                 var s2 = repository.TestLockItems.Simple.All().Single();
@@ -209,11 +212,11 @@ namespace CommonConcepts.Test
         [TestMethod]
         public void PersistentObjectIgnoredWhenVerifyingOldData()
         {
-            using (var executionContext = new CommonTestExecutionContext())
+            using (var container = new RhetosTestContainer())
             {
-                executionContext.SqlExecuter.ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;",
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] { "DELETE FROM TestLockItems.Simple;",
                     "INSERT INTO TestLockItems.Simple (Name) VALUES ('abc locked')" });
-                var repository = new Common.DomRepository(executionContext);
+                var repository = container.Resolve<Common.DomRepository>();
 
                 var s1 = repository.TestLockItems.Simple.All().Single();
                 Assert.AreEqual("abc locked", s1.Name);
@@ -229,10 +232,53 @@ namespace CommonConcepts.Test
                 Assert.AreEqual("def", s1.Name);
                 Assert.AreEqual("abc locked", repository.TestLockItems.Simple.All().Single().Name);
 
-                TestUtility.ShouldFail(() => repository.TestLockItems.Simple.Insert(new[] { s1 }), "Inserting already existing object");
+                TestUtility.ShouldFail(() => repository.TestLockItems.Simple.Insert(new[] { s1 }), "Inserting a record that already exists");
 
                 Assert.AreEqual("def", s1.Name);
                 Assert.AreEqual("abc locked", repository.TestLockItems.Simple.All().Single().Name);
+            }
+        }
+
+        [TestMethod]
+        public void LockExceptProperty()
+        {
+            UpdateLockedExceptProperty(item => item.Name += "X", updateShouldPass: true);
+            UpdateLockedExceptProperty(item => item.Count++, updateShouldPass: false);
+            UpdateLockedExceptProperty(item => item.TestReferenceID = null, updateShouldPass: false);
+        }
+
+        public void UpdateLockedExceptProperty(Action<TestLockItems.Simple2> update, bool updateShouldPass)
+        {
+            using (var container = new RhetosTestContainer())
+            {
+                container.Resolve<ISqlExecuter>().ExecuteSql(new[] {
+                    "DELETE FROM TestLockItems.Simple2",
+                    "DELETE FROM TestLockItems.Simple" });
+
+                var simpleRepos = container.Resolve<GenericRepository<TestLockItems.Simple>>();
+                var simple2Repos = container.Resolve<GenericRepository<TestLockItems.Simple2>>();
+
+                var s1a = new TestLockItems.Simple { Name = "a" };
+                var s1b = new TestLockItems.Simple { Name = "b" };
+                var s2a = new TestLockItems.Simple2 { Name = "aa", Count = 100, TestReference = s1a };
+                var s2b = new TestLockItems.Simple2 { Name = "LockExceptName", Count = 200, TestReference = s1b };
+
+                simpleRepos.Insert(s1a, s1b);
+                simple2Repos.Insert(s2a, s2b);
+
+                s2a.Name += "X";
+                s2a.Count++;
+                update(s2b);
+
+                if (updateShouldPass)
+                {
+                    simple2Repos.Update(s2a, s2b);
+                    TestUtility.DumpSorted(simple2Repos.Read(), item => item.Name + " " + item.Count);
+                    Assert.AreEqual(s2b.Name, simple2Repos.Read(new[] { s2b.ID }).Single().Name);
+                }
+                else
+                    TestUtility.ShouldFail(() => simple2Repos.Update(s2a, s2b),
+                        "The record is locked except the Name property", s2b.ID.ToString());
             }
         }
     }

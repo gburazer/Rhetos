@@ -30,9 +30,18 @@ using Rhetos.Extensibility;
 using System.Collections.Generic;
 using Rhetos.TestCommon;
 using System.Text.RegularExpressions;
+using Rhetos.Dom;
 
 namespace Rhetos.DatabaseGenerator.Test
 {
+    class DomainObjectModelMock : IDomainObjectModel
+    {
+        public System.Reflection.Assembly Assembly
+        {
+            get { return GetType().Assembly; }
+        }
+    }
+
     public class TestConceptInfo : IConceptInfo
     {
         [ConceptKey]
@@ -46,39 +55,6 @@ namespace Rhetos.DatabaseGenerator.Test
         public override int GetHashCode()
         {
             return Name.GetHashCode();
-        }
-    }
-
-    class NullDslContainer : IDslContainer
-    {
-        public List<IConceptInfo> AddNewConceptsAndReplaceReferences(IEnumerable<IConceptInfo> concepts)
-        {
-            return concepts.ToList();
-        }
-
-        public IEnumerable<IConceptInfo> Concepts
-        {
-            get { return new IConceptInfo[] {}; }
-        }
-
-        public IDictionary<string, IConceptInfo> ConceptsByKey
-        {
-            get { throw new NotImplementedException(); }
-        }
-
-        public void ReportErrorForUnresolvedConcepts()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SortReferencesBeforeUsingConcept()
-        {
-            throw new NotImplementedException();
-        }
-
-        public IDictionary<string, IConceptInfo> UnresolvedConceptReferencesByKey
-        {
-            get { throw new NotImplementedException(); }
         }
     }
 
@@ -218,7 +194,8 @@ namespace Rhetos.DatabaseGenerator.Test
         {
             return new ConceptApplicationRepository(
                 new MockSqlExecuter(conceptApplications),
-                new ConsoleLogProvider());
+                new ConsoleLogProvider(),
+                new XmlUtility(new DomainObjectModelMock()));
         }
 
         [TestMethod]

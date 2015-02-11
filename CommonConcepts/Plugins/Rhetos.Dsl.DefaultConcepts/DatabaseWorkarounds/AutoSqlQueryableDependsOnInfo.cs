@@ -27,14 +27,18 @@ namespace Rhetos.Dsl.DefaultConcepts
 {
     [Export(typeof(IConceptInfo))]
     [ConceptKeyword("AutodetectSqlDependencies")]
-    public class AutoSqlQueryableDependsOnInfo : IMacroConcept
+    public class AutoSqlQueryableDependsOnInfo : IConceptInfo
     {
         [ConceptKey]
         public SqlQueryableInfo Dependent { get; set; }
+    }
 
-        public IEnumerable<IConceptInfo> CreateNewConcepts(IEnumerable<IConceptInfo> existingConcepts)
+    [Export(typeof(IConceptMacro))]
+    public class AutoSqlQueryableDependsOnMacro: IConceptMacro<AutoSqlQueryableDependsOnInfo>
+    {
+        public IEnumerable<IConceptInfo> CreateNewConcepts(AutoSqlQueryableDependsOnInfo conceptInfo, IDslModel existingConcepts)
         {
-            return SqlAnalysis.GenerateDependencies(Dependent, existingConcepts, Dependent.SqlSource);
+            return SqlAnalysis.GenerateDependencies(conceptInfo.Dependent, existingConcepts, conceptInfo.Dependent.SqlSource);
         }
     }
 }

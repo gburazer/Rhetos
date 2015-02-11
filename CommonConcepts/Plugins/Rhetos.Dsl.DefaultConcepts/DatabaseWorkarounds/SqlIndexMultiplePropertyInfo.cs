@@ -26,10 +26,11 @@ using System.Text;
 namespace Rhetos.Dsl.DefaultConcepts
 {
     [Export(typeof(IConceptInfo))]
-    public class SqlIndexMultiplePropertyInfo : IConceptInfo
+    public class SqlIndexMultiplePropertyInfo : IValidationConcept
     {
         [ConceptKey]
         public SqlIndexMultipleInfo SqlIndex { get; set; }
+
         [ConceptKey]
         public PropertyInfo Property { get; set; }
 

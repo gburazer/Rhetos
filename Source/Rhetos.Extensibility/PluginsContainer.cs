@@ -29,7 +29,7 @@ namespace Rhetos.Extensibility
 {
     public class PluginsContainer<TPlugin> : IPluginsContainer<TPlugin>
     {
-        Lazy<IEnumerable<TPlugin>> _plugins;
+        Lazy<IEnumerable<TPlugin>> _sortedPlugins;
         Lazy<IIndex<Type, IEnumerable<TPlugin>>> _pluginsByImplementation;
         PluginsMetadataCache<TPlugin> _cache;
 
@@ -38,14 +38,23 @@ namespace Rhetos.Extensibility
             Lazy<IIndex<Type, IEnumerable<TPlugin>>> pluginsByImplementation,
             PluginsMetadataCache<TPlugin> cache)
         {
-            _plugins = plugins;
+            _sortedPlugins = new Lazy<IEnumerable<TPlugin>>(() => SortPlugins(plugins.Value));
             _pluginsByImplementation = pluginsByImplementation;
             _cache = cache;
         }
 
+        private IEnumerable<TPlugin> SortPlugins(IEnumerable<TPlugin> plugins)
+        {
+            var sortedPlugins = plugins.ToArray();
+            _cache.SortByMetadataDependsOn(typeof(object), sortedPlugins);
+            return sortedPlugins;
+        }
+
+        #region IPluginsContainer implementations
+
         public IEnumerable<TPlugin> GetPlugins()
         {
-            return _plugins.Value;
+            return _sortedPlugins.Value;
         }
 
         /// <param name="metadataKey">Use one of the constants from the Rhetos.Extensibility.MefProvider class.</param>
@@ -62,7 +71,7 @@ namespace Rhetos.Extensibility
 
         public IEnumerable<TPlugin> GetImplementations(Type implements)
         {
-            var typeHierarchy = GetTypeHierarchy(implements);
+            var typeHierarchy = CsUtility.GetClassHierarchy(implements);
             var allImplementations = typeHierarchy.SelectMany(type => _pluginsByImplementation.Value[type]).ToArray();
 
             _cache.SortByMetadataDependsOn(implements, allImplementations);
@@ -70,16 +79,6 @@ namespace Rhetos.Extensibility
             return allImplementations;
         }
 
-        protected static List<Type> GetTypeHierarchy(Type type)
-        {
-            var types = new List<Type>();
-            while (type != typeof(object))
-            {
-                types.Add(type);
-                type = type.BaseType;
-            }
-            types.Reverse();
-            return types;
-        }
+        #endregion
     }
 }

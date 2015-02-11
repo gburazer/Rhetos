@@ -40,16 +40,15 @@ namespace Rhetos.Dom.DefaultConcepts
         public void GenerateCode(IConceptInfo conceptInfo, ICodeBuilder codeBuilder)
         {
             var info = (EntityHistoryInfo)conceptInfo;
-            codeBuilder.InsertCode(FilterInterfaceSnippet(info), RepositoryHelper.RepositoryInterfaces, info.ChangesEntity);
-            codeBuilder.InsertCode(FilterImplementationSnippet(info), RepositoryHelper.RepositoryMembers, info.ChangesEntity);
+            codeBuilder.InsertCode(FilterInterfaceSnippet(info), RepositoryHelper.RepositoryInterfaces, info.Dependency_ChangesEntity);
+            codeBuilder.InsertCode(FilterImplementationSnippet(info), RepositoryHelper.RepositoryMembers, info.Dependency_ChangesEntity);
             codeBuilder.InsertCode(AdditionalParameterSnippet(info), DataStructureCodeGenerator.BodyTag, info.Entity);
             codeBuilder.InsertCode(CreateHistoryOnUpdateSnippet(info), WritableOrmDataStructureCodeGenerator.OldDataLoadedTag, info.Entity);
-            codeBuilder.InsertCode(VerifyChangesEntityTimeSnippet(info), WritableOrmDataStructureCodeGenerator.OldDataLoadedTag, info.ChangesEntity);
         }
 
         private static string FilterInterfaceSnippet(EntityHistoryInfo info)
         {
-            return "IFilterRepository<System.DateTime, " + info.ChangesEntity.Module.Name + "." + info.ChangesEntity.Name + ">";
+            return "IFilterRepository<System.DateTime, " + info.Dependency_ChangesEntity.Module.Name + "." + info.Dependency_ChangesEntity.Name + ">";
         }
 
         /// <summary>
@@ -70,8 +69,8 @@ namespace Rhetos.Dom.DefaultConcepts
         }}
 
 ",
-            info.ChangesEntity.Module.Name,
-            info.ChangesEntity.Name,
+            info.Dependency_ChangesEntity.Module.Name,
+            info.Dependency_ChangesEntity.Name,
             SqlUtility.Identifier(info.Entity.Module.Name),
             SqlUtility.Identifier(info.Entity.Name + "_AtTime"));
         }
@@ -83,10 +82,10 @@ namespace Rhetos.Dom.DefaultConcepts
         private static string AdditionalParameterSnippet(EntityHistoryInfo info)
         {
             return
-@"
-        private bool _overwriteCurrentRecordOnUpdate;
+@"        private bool _overwriteCurrentRecordOnUpdate;
         public virtual void SetOverwriteCurrentRecordOnUpdate(bool value) { this._overwriteCurrentRecordOnUpdate = value; }
         public virtual bool GetOverwriteCurrentRecordOnUpdate() { return this._overwriteCurrentRecordOnUpdate; }
+
 ";
         }
 
@@ -102,10 +101,6 @@ namespace Rhetos.Dom.DefaultConcepts
                 foreach (var newItem in insertedNew.Concat(updatedNew))
                     if (newItem.ActiveSince == null)
                         newItem.ActiveSince = now;
-                    else if (newItem.ActiveSince > now.AddSeconds(errorMarginSeconds))
-                        throw new Rhetos.UserException(string.Format(
-                            ""It is not allowed to enter a future time in {0}.{1}.ActiveSince ({{0}}). Set the property value to NULL to automatically use current time ({{1}})."",
-                            newItem.ActiveSince, now));
 
                 if (updatedNew.Count() > 0)
 			    {{
@@ -133,25 +128,6 @@ namespace Rhetos.Dom.DefaultConcepts
             info.Entity.Module.Name,
             info.Entity.Name,
             ClonePropertiesTag.Evaluate(info));
-        }
-
-        private static string VerifyChangesEntityTimeSnippet(EntityHistoryInfo info)
-        {
-            return string.Format(
-@"			if (insertedNew.Count() > 0 || updatedNew.Count() > 0)
-            {{
-                var now = SqlUtility.GetDatabaseTime(_executionContext.SqlExecuter);
-                
-                foreach (var newItem in insertedNew.Concat(updatedNew))
-                    if (newItem.ActiveSince > now)
-                        throw new Rhetos.UserException(string.Format(
-                            ""It is not allowed to enter a future time in {0}.{1}.ActiveSince ({{0}}). Current server time is {{1}}."",
-                            newItem.ActiveSince, now));
-            }}
-
-",
-            info.ChangesEntity.Module.Name,
-            info.ChangesEntity.Name);
         }
     }
 }
